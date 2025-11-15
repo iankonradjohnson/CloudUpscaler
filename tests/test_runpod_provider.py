@@ -58,3 +58,31 @@ def test_gets_job_status_from_runpod_api():
         # Then
         assert status == "COMPLETED"
         mock_get.assert_called_once()
+
+
+def test_gets_output_url_from_completed_job():
+    """Should get output URL from completed job"""
+    from cloud_upscaler.providers.runpod import RunPodComputeProvider
+
+    # Given
+    provider = RunPodComputeProvider(
+        api_key="test-api-key",
+        endpoint_id="test-endpoint"
+    )
+
+    # Mock the HTTP client
+    with patch('requests.get') as mock_get:
+        mock_get.return_value.json.return_value = {
+            "id": "job-123",
+            "status": "COMPLETED",
+            "output": {
+                "output_url": "https://storage.googleapis.com/output.zip"
+            }
+        }
+
+        # When
+        output_url = provider.get_job_output_url("job-123")
+
+        # Then
+        assert output_url == "https://storage.googleapis.com/output.zip"
+        mock_get.assert_called_once()
