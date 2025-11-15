@@ -247,3 +247,76 @@ class TestHandlerUpscaling:
                             assert len(upscaler_created) > 0
                             # Verify enhance was called
                             assert mock_upsampler.enhance.called
+
+
+class TestHandlerOutput:
+    """Test handler output ZIP and upload"""
+
+    def test_creates_output_zip_from_upscaled_files(self, tmp_path):
+        """Handler should create ZIP from upscaled PNG files"""
+        import sys
+        from pathlib import Path
+
+        # Mock Real-ESRGAN imports
+        sys.modules['basicsr'] = Mock()
+        sys.modules['basicsr.archs'] = Mock()
+        sys.modules['basicsr.archs.rrdbnet_arch'] = Mock()
+        sys.modules['realesrgan'] = Mock()
+
+        docker_dir = Path(__file__).parent.parent / 'docker'
+        sys.path.insert(0, str(docker_dir))
+
+        from handler import handler
+
+        # Create fake input ZIP
+        input_zip = tmp_path / "input.zip"
+        with zipfile.ZipFile(input_zip, 'w') as zf:
+            zf.writestr("image1.png", b"fake png")
+
+        # Mock everything
+        mock_response = Mock()
+        mock_response.content = input_zip.read_bytes()
+        mock_response.raise_for_status = Mock()
+
+        zipfile_calls = []
+
+        # Track ZipFile calls
+        original_zipfile_init = zipfile.ZipFile.__init__
+
+        def tracking_init(self, file, mode='r', *args, **kwargs):
+            zipfile_calls.append(('init', str(file), mode))
+            return original_zipfile_init(self, file, mode, *args, **kwargs)
+
+        mock_upsampler = Mock()
+        # Mock cv2 to actually create a file
+        mock_cv2_imread = Mock(return_value="fake_image_data")
+        mock_cv2_imwrite = Mock()
+
+        with patch('handler.requests.get', return_value=mock_response):
+            with patch('handler.storage'):
+                with patch('handler.RealESRGANer', return_value=mock_upsampler):
+                    with patch('handler.RRDBNet'):
+                        with patch.object(zipfile.ZipFile, '__init__', tracking_init):
+                            with patch('handler.cv2.imread', mock_cv2_imread):
+                                with patch('handler.cv2.imwrite', mock_cv2_imwrite):
+                                    # Mock enhance to create actual output file
+                                    def mock_enhance(img, outscale):
+                                        # Actually create output file
+                                        return ("fake_output_data", None)
+
+                                    mock_upsampler.enhance = mock_enhance
+
+                                    job = {
+                                        'input': {
+                                            'input_url': 'https://storage.googleapis.com/bucket/input.zip',
+                                            'output_bucket': 'test-bucket',
+                                            'output_path': 'test/output.zip',
+                                            'model_name': 'net_g_1000000'
+                                        }
+                                    }
+
+                                    result = handler(job)
+
+                                    # Verify output ZIP was created (mode='w')
+                                    output_zips = [c for c in zipfile_calls if 'output.zip' in c[1] and c[2] == 'w']
+                                    assert len(output_zips) > 0

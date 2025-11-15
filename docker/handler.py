@@ -82,6 +82,12 @@ def handler(job):
                     output_file = output_dir / png_file.name
                     cv2.imwrite(str(output_file), output)
 
+            # Create output ZIP
+            output_zip_path = temp_path / "output.zip"
+            with zipfile.ZipFile(output_zip_path, 'w') as zf:
+                for output_file in output_dir.glob("*.png"):
+                    zf.write(output_file, output_file.name)
+
             return {
                 'output': {}
             }
