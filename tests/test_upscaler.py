@@ -73,10 +73,12 @@ class FakeStorageProvider:
         return f"fake://storage/{remote_path}"
 
     def download(self, remote_url, local_path):
+        import zipfile
         # Track download
         self.downloaded_files.append((remote_url, local_path))
-        # Write fake upscaled data
-        Path(local_path).write_bytes(b"fake upscaled zip")
+        # Write fake upscaled data as valid ZIP
+        with zipfile.ZipFile(local_path, 'w') as zf:
+            zf.writestr("fake_result.png", b"fake upscaled png data")
 
 
 class FakeComputeProvider:
@@ -362,3 +364,29 @@ class TestProviderAbstraction:
         )
 
         then_storage_provider_downloaded_results(fake_storage)
+
+    def test_uses_cloud_processing_when_providers_given(self, tmp_path):
+        """When both providers given, should use cloud processing not local simulation"""
+        context = given_directory_with_png_images(tmp_path, count=2)
+        fake_storage = FakeStorageProvider()
+        fake_compute = FakeComputeProvider()
+
+        # Fake storage provider's download writes a zip with actual files
+        import zipfile
+        def download_with_real_zip(remote_url, local_path):
+            fake_storage.downloaded_files.append((remote_url, local_path))
+            # Create a real zip with upscaled files
+            with zipfile.ZipFile(local_path, 'w') as zf:
+                zf.writestr("image_000.png", b"UPSCALED DATA 1")
+                zf.writestr("image_001.png", b"UPSCALED DATA 2")
+
+        fake_storage.download = download_with_real_zip
+
+        when_upscaling_images(
+            context,
+            storage_provider=fake_storage,
+            compute_provider=fake_compute
+        )
+
+        # Should have actual upscaled files from cloud, not simulated local upscaling
+        then_upscaled_images_exist_in(context.output_dir, count=2)

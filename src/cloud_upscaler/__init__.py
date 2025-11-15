@@ -60,13 +60,20 @@ def upscale_images(
             result_zip_path = zip_path.parent / "output.zip"
             storage_provider.download(output_url, str(result_zip_path))
 
-    # Simulate upscaling by making files larger (stub for real cloud processing)
-    for png_file in png_files:
-        output_file = output_dir / png_file.name
-        original_data = png_file.read_bytes()
-        # Simulate upscaling: make file 2x larger
-        upscaled_data = original_data + b" [UPSCALED]"
-        output_file.write_bytes(upscaled_data)
+            # Unzip results to output directory
+            with zipfile.ZipFile(result_zip_path, 'r') as zf:
+                zf.extractall(output_dir)
+
+            # Clean up result zip
+            result_zip_path.unlink()
+    else:
+        # Simulate upscaling by making files larger (local mode without cloud)
+        for png_file in png_files:
+            output_file = output_dir / png_file.name
+            original_data = png_file.read_bytes()
+            # Simulate upscaling: make file 2x larger
+            upscaled_data = original_data + b" [UPSCALED]"
+            output_file.write_bytes(upscaled_data)
 
     # Clean up zip file
     zip_path.unlink()
