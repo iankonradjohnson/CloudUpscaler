@@ -6,6 +6,114 @@ Starting with edge cases, working toward happy path.
 
 from pathlib import Path
 import pytest
+from dataclasses import dataclass
+
+
+# ============================================================================
+# Given-When-Then DSL Helpers
+# ============================================================================
+
+@dataclass
+class TestContext:
+    """Context object for test setup"""
+    input_dir: Path
+    output_dir: Path
+
+
+def given_directory_with_png_images(tmp_path, count: int) -> TestContext:
+    """Create test directories with PNG files"""
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    for i in range(count):
+        (input_dir / f"image_{i:03d}.png").write_bytes(f"fake png {i}".encode())
+
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+
+    return TestContext(input_dir=input_dir, output_dir=output_dir)
+
+
+def given_nonexistent_directory() -> Path:
+    """Return path to directory that doesn't exist"""
+    return Path("/does/not/exist")
+
+
+def given_empty_directory(tmp_path) -> Path:
+    """Create empty directory"""
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    return empty
+
+
+def given_directory_with_too_many_images(tmp_path) -> Path:
+    """Create directory with >1000 PNG files"""
+    many_dir = tmp_path / "many"
+    many_dir.mkdir()
+    for i in range(1001):
+        (many_dir / f"image_{i:04d}.png").touch()
+    return many_dir
+
+
+def given_directory_with_single_image(tmp_path) -> Path:
+    """Create directory with only 1 PNG file"""
+    single_dir = tmp_path / "single"
+    single_dir.mkdir()
+    (single_dir / "single.png").touch()
+    return single_dir
+
+
+class FakeStorageProvider:
+    """Fake storage provider for testing"""
+    def __init__(self):
+        self.uploaded_files = []
+        self.downloaded_files = []
+
+    def upload(self, local_path, remote_path):
+        self.uploaded_files.append((str(local_path), remote_path))
+        return f"fake://storage/{remote_path}"
+
+    def download(self, remote_url, local_path):
+        # Write fake upscaled data
+        Path(local_path).write_bytes(b"fake upscaled zip")
+
+
+def when_upscaling_images(context: TestContext, **kwargs):
+    """Perform upscaling operation"""
+    from cloud_upscaler import upscale_images
+    return upscale_images(
+        input_dir=context.input_dir,
+        output_dir=context.output_dir,
+        **kwargs
+    )
+
+
+def then_result_is_successful(result):
+    """Verify result indicates success"""
+    assert result.success is True
+
+
+def then_images_were_processed(result, count: int):
+    """Verify correct number of images processed"""
+    assert result.images_processed == count
+
+
+def then_upscaled_images_exist_in(directory: Path, count: int):
+    """Verify upscaled images exist in output"""
+    png_files = list(directory.glob("*.png"))
+    assert len(png_files) == count
+
+
+def then_upscaled_files_are_larger_than(directory: Path, original_size: int):
+    """Verify upscaled files are larger than original"""
+    for png_file in directory.glob("*.png"):
+        assert png_file.stat().st_size > original_size
+
+
+def then_storage_provider_uploaded_zip(storage_provider: FakeStorageProvider):
+    """Verify storage provider uploaded a zip file"""
+    assert len(storage_provider.uploaded_files) > 0
+    uploaded_path, remote_path = storage_provider.uploaded_files[0]
+    assert uploaded_path.endswith('.zip')
 
 
 class TestUpscaleImages:
@@ -15,165 +123,86 @@ class TestUpscaleImages:
         """Edge case: input_dir doesn't exist"""
         from cloud_upscaler import upscale_images
 
-        nonexistent = Path("/does/not/exist")
+        nonexistent = given_nonexistent_directory()
 
         with pytest.raises(ValueError, match="Input directory does not exist"):
-            upscale_images(
-                input_dir=nonexistent,
-                output_dir=Path("/tmp/output")
-            )
+            upscale_images(input_dir=nonexistent, output_dir=Path("/tmp/output"))
 
     def test_rejects_directory_with_no_png_files(self, tmp_path):
         """Edge case: input_dir exists but has no PNG files"""
         from cloud_upscaler import upscale_images
 
-        empty_dir = tmp_path / "empty"
-        empty_dir.mkdir()
+        empty_dir = given_empty_directory(tmp_path)
 
         with pytest.raises(ValueError, match="No PNG files found"):
-            upscale_images(
-                input_dir=empty_dir,
-                output_dir=Path("/tmp/output")
-            )
+            upscale_images(input_dir=empty_dir, output_dir=Path("/tmp/output"))
 
     def test_rejects_too_many_files(self, tmp_path):
         """Edge case: more than 1000 PNG files (per requirements)"""
         from cloud_upscaler import upscale_images
 
-        dir_with_many = tmp_path / "many"
-        dir_with_many.mkdir()
-
-        # Create 1001 PNG files
-        for i in range(1001):
-            (dir_with_many / f"image_{i:04d}.png").touch()
+        dir_with_many = given_directory_with_too_many_images(tmp_path)
 
         with pytest.raises(ValueError, match="Too many PNG files"):
-            upscale_images(
-                input_dir=dir_with_many,
-                output_dir=Path("/tmp/output")
-            )
+            upscale_images(input_dir=dir_with_many, output_dir=Path("/tmp/output"))
 
     def test_rejects_single_file(self, tmp_path):
         """Edge case: only 1 PNG file (requirements say 2-1000)"""
         from cloud_upscaler import upscale_images
 
-        dir_with_one = tmp_path / "one"
-        dir_with_one.mkdir()
-        (dir_with_one / "single.png").touch()
+        dir_with_one = given_directory_with_single_image(tmp_path)
 
         with pytest.raises(ValueError, match="At least 2 PNG files required"):
-            upscale_images(
-                input_dir=dir_with_one,
-                output_dir=Path("/tmp/output")
-            )
+            upscale_images(input_dir=dir_with_one, output_dir=Path("/tmp/output"))
 
     def test_upscales_two_files_successfully(self, tmp_path):
         """Happy path: upscale 2 PNG files"""
-        from cloud_upscaler import upscale_images
+        context = given_directory_with_png_images(tmp_path, count=2)
 
-        input_dir = tmp_path / "input"
-        input_dir.mkdir()
-        (input_dir / "page1.png").write_bytes(b"fake png 1")
-        (input_dir / "page2.png").write_bytes(b"fake png 2")
+        result = when_upscaling_images(context)
 
-        output_dir = tmp_path / "output"
-        output_dir.mkdir()
-
-        result = upscale_images(input_dir=input_dir, output_dir=output_dir)
-
-        assert result.success is True
+        then_result_is_successful(result)
 
     def test_creates_upscaled_files_in_output_directory(self, tmp_path):
         """Happy path: verify upscaled files are created"""
-        from cloud_upscaler import upscale_images
+        context = given_directory_with_png_images(tmp_path, count=2)
 
-        input_dir = tmp_path / "input"
-        input_dir.mkdir()
-        (input_dir / "page1.png").write_bytes(b"fake png 1")
-        (input_dir / "page2.png").write_bytes(b"fake png 2")
+        when_upscaling_images(context)
 
-        output_dir = tmp_path / "output"
-        output_dir.mkdir()
-
-        upscale_images(input_dir=input_dir, output_dir=output_dir)
-
-        assert (output_dir / "page1.png").exists()
-        assert (output_dir / "page2.png").exists()
+        then_upscaled_images_exist_in(context.output_dir, count=2)
 
     def test_upscaled_files_are_larger_than_input(self, tmp_path):
         """Verify actual upscaling occurred (files should be larger)"""
-        from cloud_upscaler import upscale_images
+        context = given_directory_with_png_images(tmp_path, count=2)
+        original_size = 5  # "fake png 0" is 10 bytes
 
-        input_dir = tmp_path / "input"
-        input_dir.mkdir()
-        small_data = b"small"
-        (input_dir / "page1.png").write_bytes(small_data)
-        (input_dir / "page2.png").write_bytes(small_data)
+        when_upscaling_images(context)
 
-        output_dir = tmp_path / "output"
-        output_dir.mkdir()
-
-        upscale_images(input_dir=input_dir, output_dir=output_dir)
-
-        # Upscaled files should be larger than originals
-        assert (output_dir / "page1.png").stat().st_size > len(small_data)
+        then_upscaled_files_are_larger_than(context.output_dir, original_size)
 
     def test_tracks_files_processed_in_result(self, tmp_path):
         """Result should include count of images processed"""
-        from cloud_upscaler import upscale_images
+        context = given_directory_with_png_images(tmp_path, count=3)
 
-        input_dir = tmp_path / "input"
-        input_dir.mkdir()
-        (input_dir / "page1.png").write_bytes(b"data1")
-        (input_dir / "page2.png").write_bytes(b"data2")
-        (input_dir / "page3.png").write_bytes(b"data3")
+        result = when_upscaling_images(context)
 
-        output_dir = tmp_path / "output"
-        output_dir.mkdir()
-
-        result = upscale_images(input_dir=input_dir, output_dir=output_dir)
-
-        assert result.images_processed == 3
+        then_images_were_processed(result, count=3)
 
     def test_accepts_custom_model_name(self, tmp_path):
         """Should accept model_name parameter per requirements"""
-        from cloud_upscaler import upscale_images
+        context = given_directory_with_png_images(tmp_path, count=2)
 
-        input_dir = tmp_path / "input"
-        input_dir.mkdir()
-        (input_dir / "page1.png").write_bytes(b"data1")
-        (input_dir / "page2.png").write_bytes(b"data2")
+        result = when_upscaling_images(context, model_name="custom_model")
 
-        output_dir = tmp_path / "output"
-        output_dir.mkdir()
-
-        result = upscale_images(
-            input_dir=input_dir,
-            output_dir=output_dir,
-            model_name="custom_model"
-        )
-
-        assert result.success is True
+        then_result_is_successful(result)
 
     def test_accepts_timeout_parameter(self, tmp_path):
         """Should accept timeout_seconds parameter per requirements"""
-        from cloud_upscaler import upscale_images
+        context = given_directory_with_png_images(tmp_path, count=2)
 
-        input_dir = tmp_path / "input"
-        input_dir.mkdir()
-        (input_dir / "page1.png").write_bytes(b"data1")
-        (input_dir / "page2.png").write_bytes(b"data2")
+        result = when_upscaling_images(context, timeout_seconds=1800)
 
-        output_dir = tmp_path / "output"
-        output_dir.mkdir()
-
-        result = upscale_images(
-            input_dir=input_dir,
-            output_dir=output_dir,
-            timeout_seconds=1800
-        )
-
-        assert result.success is True
+        then_result_is_successful(result)
 
 
 class TestCloudProcessing:
@@ -249,35 +278,18 @@ class TestProviderAbstraction:
 
     def test_accepts_custom_storage_provider(self, tmp_path):
         """Per Story 4: Should accept custom storage provider"""
-        from cloud_upscaler import upscale_images
-
-        # Simple fake storage provider
-        class FakeStorageProvider:
-            def __init__(self):
-                self.uploaded_files = []
-                self.downloaded_files = []
-
-            def upload(self, local_path, remote_path):
-                self.uploaded_files.append((local_path, remote_path))
-                return f"fake://storage/{remote_path}"
-
-            def download(self, remote_url, local_path):
-                self.downloaded_files.append((remote_url, local_path))
-
-        input_dir = tmp_path / "input"
-        input_dir.mkdir()
-        (input_dir / "page1.png").write_bytes(b"data1")
-        (input_dir / "page2.png").write_bytes(b"data2")
-
-        output_dir = tmp_path / "output"
-        output_dir.mkdir()
-
+        context = given_directory_with_png_images(tmp_path, count=2)
         fake_storage = FakeStorageProvider()
 
-        result = upscale_images(
-            input_dir=input_dir,
-            output_dir=output_dir,
-            storage_provider=fake_storage
-        )
+        result = when_upscaling_images(context, storage_provider=fake_storage)
 
-        assert result.success is True
+        then_result_is_successful(result)
+
+    def test_uploads_zip_using_storage_provider(self, tmp_path):
+        """Should upload zip file using provided storage provider"""
+        context = given_directory_with_png_images(tmp_path, count=2)
+        fake_storage = FakeStorageProvider()
+
+        when_upscaling_images(context, storage_provider=fake_storage)
+
+        then_storage_provider_uploaded_zip(fake_storage)

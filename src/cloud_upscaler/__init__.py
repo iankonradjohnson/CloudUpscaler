@@ -42,6 +42,10 @@ def upscale_images(
         for png_file in png_files:
             zf.write(png_file, png_file.name)
 
+    # Upload zip if storage provider provided
+    if storage_provider:
+        remote_url = storage_provider.upload(str(zip_path), "input.zip")
+
     # Simulate upscaling by making files larger (stub for real cloud processing)
     for png_file in png_files:
         output_file = output_dir / png_file.name
