@@ -159,6 +159,18 @@ def then_storage_provider_downloaded_results(storage_provider: FakeStorageProvid
     assert "output" in remote_url or "result" in remote_url
 
 
+def then_result_indicates_failure(result):
+    """Verify result indicates failure"""
+    assert result.success is False
+
+
+def then_error_message_is_clear(result):
+    """Verify result contains clear error message"""
+    assert hasattr(result, 'error')
+    assert result.error is not None
+    assert len(result.error) > 0
+
+
 class TestUpscaleImages:
     """Test the main upscale_images function"""
 
@@ -390,3 +402,19 @@ class TestProviderAbstraction:
 
         # Should have actual upscaled files from cloud, not simulated local upscaling
         then_upscaled_images_exist_in(context.output_dir, count=2)
+
+    def test_handles_failed_job_gracefully(self, tmp_path):
+        """Per Story 2: If job fails, I get clear error message"""
+        context = given_directory_with_png_images(tmp_path, count=2)
+        fake_storage = FakeStorageProvider()
+        fake_compute = FakeComputeProvider()
+        fake_compute.job_status = "FAILED"
+
+        result = when_upscaling_images(
+            context,
+            storage_provider=fake_storage,
+            compute_provider=fake_compute
+        )
+
+        then_result_indicates_failure(result)
+        then_error_message_is_clear(result)

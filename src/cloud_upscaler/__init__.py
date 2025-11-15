@@ -13,6 +13,7 @@ class UpscaleResult:
     """Result of upscaling operation"""
     success: bool
     images_processed: int = 0
+    error: str = None
 
 
 def upscale_images(
@@ -53,6 +54,11 @@ def upscale_images(
 
         # Poll for job completion (simplified - no actual polling in this stub)
         status = compute_provider.get_job_status(job_id)
+
+        # Check for job failure
+        if status == "FAILED":
+            zip_path.unlink()
+            return UpscaleResult(success=False, error="Job failed during processing")
 
         # Download results if job completed
         if status == "COMPLETED":
