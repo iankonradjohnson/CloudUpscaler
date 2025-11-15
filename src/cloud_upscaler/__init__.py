@@ -52,26 +52,28 @@ def upscale_images(
     if compute_provider and storage_provider:
         job_id = compute_provider.submit_job(remote_url, model_name, timeout_seconds)
 
-        # Poll for job completion (simplified - no actual polling in this stub)
-        status = compute_provider.get_job_status(job_id)
+        # Poll for job completion
+        while True:
+            status = compute_provider.get_job_status(job_id)
 
-        # Check for job failure
-        if status == "FAILED":
-            zip_path.unlink()
-            return UpscaleResult(success=False, error="Job failed during processing")
+            # Check for job failure
+            if status == "FAILED":
+                zip_path.unlink()
+                return UpscaleResult(success=False, error="Job failed during processing")
 
-        # Download results if job completed
-        if status == "COMPLETED":
-            output_url = compute_provider.get_job_output_url(job_id)
-            result_zip_path = zip_path.parent / "output.zip"
-            storage_provider.download(output_url, str(result_zip_path))
+            # Download results if job completed
+            if status == "COMPLETED":
+                output_url = compute_provider.get_job_output_url(job_id)
+                result_zip_path = zip_path.parent / "output.zip"
+                storage_provider.download(output_url, str(result_zip_path))
 
-            # Unzip results to output directory
-            with zipfile.ZipFile(result_zip_path, 'r') as zf:
-                zf.extractall(output_dir)
+                # Unzip results to output directory
+                with zipfile.ZipFile(result_zip_path, 'r') as zf:
+                    zf.extractall(output_dir)
 
-            # Clean up result zip
-            result_zip_path.unlink()
+                # Clean up result zip
+                result_zip_path.unlink()
+                break
     else:
         # Simulate upscaling by making files larger (local mode without cloud)
         for png_file in png_files:

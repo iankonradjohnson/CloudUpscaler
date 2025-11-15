@@ -86,7 +86,9 @@ class FakeComputeProvider:
     def __init__(self):
         self.submitted_jobs = []
         self.job_status = "COMPLETED"
+        self.job_statuses = None  # For simulating job progression
         self.output_url = "fake://storage/output.zip"
+        self.status_checks = []  # Track how many times status was checked
 
     def submit_job(self, input_url, model_name, timeout_seconds):
         job_id = f"fake-job-{len(self.submitted_jobs)}"
@@ -99,6 +101,13 @@ class FakeComputeProvider:
         return job_id
 
     def get_job_status(self, job_id):
+        self.status_checks.append(job_id)
+        if self.job_statuses:
+            # Return next status from list
+            if len(self.status_checks) <= len(self.job_statuses):
+                return self.job_statuses[len(self.status_checks) - 1]
+            # Return last status if we've run out
+            return self.job_statuses[-1]
         return self.job_status
 
     def get_job_output_url(self, job_id):
@@ -169,6 +178,11 @@ def then_error_message_is_clear(result):
     assert hasattr(result, 'error')
     assert result.error is not None
     assert len(result.error) > 0
+
+
+def then_job_was_polled_multiple_times(compute_provider: FakeComputeProvider):
+    """Verify job status was checked multiple times (polling)"""
+    assert len(compute_provider.status_checks) >= 3
 
 
 class TestUpscaleImages:
@@ -418,3 +432,19 @@ class TestProviderAbstraction:
 
         then_result_indicates_failure(result)
         then_error_message_is_clear(result)
+
+    def test_polls_job_status_until_completion(self, tmp_path):
+        """Should poll job status multiple times until job completes"""
+        context = given_directory_with_png_images(tmp_path, count=2)
+        fake_storage = FakeStorageProvider()
+        fake_compute = FakeComputeProvider()
+        # Simulate job progression: IN_QUEUE -> IN_PROGRESS -> COMPLETED
+        fake_compute.job_statuses = ["IN_QUEUE", "IN_PROGRESS", "COMPLETED"]
+
+        when_upscaling_images(
+            context,
+            storage_provider=fake_storage,
+            compute_provider=fake_compute
+        )
+
+        then_job_was_polled_multiple_times(fake_compute)
