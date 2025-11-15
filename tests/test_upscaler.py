@@ -210,3 +210,35 @@ class TestCloudProcessing:
             assert len(zip_created) > 0
         finally:
             zipfile.ZipFile = original_zipfile
+
+    def test_cleans_up_temporary_zip_file(self, tmp_path):
+        """Per Story 2: Remote files cleaned up after processing"""
+        from cloud_upscaler import upscale_images
+        import tempfile
+
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        (input_dir / "page1.png").write_bytes(b"fake png 1")
+        (input_dir / "page2.png").write_bytes(b"fake png 2")
+
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        # Track temp files created
+        temp_files_created = []
+        original_namedtemporaryfile = tempfile.NamedTemporaryFile
+
+        def tracking_namedtemporaryfile(*args, **kwargs):
+            result = original_namedtemporaryfile(*args, **kwargs)
+            temp_files_created.append(result.name)
+            return result
+
+        tempfile.NamedTemporaryFile = tracking_namedtemporaryfile
+        try:
+            upscale_images(input_dir=input_dir, output_dir=output_dir)
+
+            # Verify temp files were cleaned up
+            for temp_file in temp_files_created:
+                assert not Path(temp_file).exists(), f"Temp file {temp_file} was not cleaned up"
+        finally:
+            tempfile.NamedTemporaryFile = original_namedtemporaryfile
