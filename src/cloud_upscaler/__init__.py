@@ -25,4 +25,9 @@ def upscale_images(input_dir: Path, output_dir: Path) -> UpscaleResult:
     if len(png_files) > 1000:
         raise ValueError("Too many PNG files")
 
+    # Copy files to output (stub for actual upscaling)
+    for png_file in png_files:
+        output_file = output_dir / png_file.name
+        output_file.write_bytes(png_file.read_bytes())
+
     return UpscaleResult(success=True)

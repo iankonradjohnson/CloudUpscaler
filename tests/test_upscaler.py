@@ -82,3 +82,20 @@ class TestUpscaleImages:
         result = upscale_images(input_dir=input_dir, output_dir=output_dir)
 
         assert result.success is True
+
+    def test_creates_upscaled_files_in_output_directory(self, tmp_path):
+        """Happy path: verify upscaled files are created"""
+        from cloud_upscaler import upscale_images
+
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        (input_dir / "page1.png").write_bytes(b"fake png 1")
+        (input_dir / "page2.png").write_bytes(b"fake png 2")
+
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        upscale_images(input_dir=input_dir, output_dir=output_dir)
+
+        assert (output_dir / "page1.png").exists()
+        assert (output_dir / "page2.png").exists()
