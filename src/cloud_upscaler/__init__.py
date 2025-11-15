@@ -51,6 +51,15 @@ def upscale_images(
     if compute_provider and storage_provider:
         job_id = compute_provider.submit_job(remote_url, model_name, timeout_seconds)
 
+        # Poll for job completion (simplified - no actual polling in this stub)
+        status = compute_provider.get_job_status(job_id)
+
+        # Download results if job completed
+        if status == "COMPLETED":
+            output_url = compute_provider.get_job_output_url(job_id)
+            result_zip_path = zip_path.parent / "output.zip"
+            storage_provider.download(output_url, str(result_zip_path))
+
     # Simulate upscaling by making files larger (stub for real cloud processing)
     for png_file in png_files:
         output_file = output_dir / png_file.name

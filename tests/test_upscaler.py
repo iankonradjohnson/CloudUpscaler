@@ -73,6 +73,8 @@ class FakeStorageProvider:
         return f"fake://storage/{remote_path}"
 
     def download(self, remote_url, local_path):
+        # Track download
+        self.downloaded_files.append((remote_url, local_path))
         # Write fake upscaled data
         Path(local_path).write_bytes(b"fake upscaled zip")
 
@@ -146,6 +148,13 @@ def then_compute_provider_received_job(compute_provider: FakeComputeProvider):
     job = compute_provider.submitted_jobs[0]
     assert "input_url" in job
     assert "model_name" in job
+
+
+def then_storage_provider_downloaded_results(storage_provider: FakeStorageProvider):
+    """Verify storage provider downloaded result files"""
+    assert len(storage_provider.downloaded_files) > 0
+    remote_url, local_path = storage_provider.downloaded_files[0]
+    assert "output" in remote_url or "result" in remote_url
 
 
 class TestUpscaleImages:
@@ -339,3 +348,17 @@ class TestProviderAbstraction:
         )
 
         then_compute_provider_received_job(fake_compute)
+
+    def test_downloads_results_after_job_completes(self, tmp_path):
+        """Should download results from storage after job completes"""
+        context = given_directory_with_png_images(tmp_path, count=2)
+        fake_storage = FakeStorageProvider()
+        fake_compute = FakeComputeProvider()
+
+        when_upscaling_images(
+            context,
+            storage_provider=fake_storage,
+            compute_provider=fake_compute
+        )
+
+        then_storage_provider_downloaded_results(fake_storage)
