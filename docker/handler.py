@@ -88,8 +88,24 @@ def handler(job):
                 for output_file in output_dir.glob("*.png"):
                     zf.write(output_file, output_file.name)
 
+            # Upload to GCS
+            client = storage.Client()
+            bucket = client.bucket(output_bucket)
+            blob = bucket.blob(output_path)
+            blob.upload_from_filename(str(output_zip_path))
+
+            # Generate signed URL
+            from datetime import timedelta
+            output_url = blob.generate_signed_url(
+                version="v4",
+                expiration=timedelta(hours=1),
+                method="GET"
+            )
+
             return {
-                'output': {}
+                'output': {
+                    'output_url': output_url
+                }
             }
 
     except Exception as e:

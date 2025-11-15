@@ -320,3 +320,65 @@ class TestHandlerOutput:
                                     # Verify output ZIP was created (mode='w')
                                     output_zips = [c for c in zipfile_calls if 'output.zip' in c[1] and c[2] == 'w']
                                     assert len(output_zips) > 0
+
+    def test_uploads_to_gcs_and_returns_signed_url(self, tmp_path):
+        """Handler should upload output ZIP to GCS and return signed URL"""
+        import sys
+        from pathlib import Path
+
+        # Mock Real-ESRGAN imports
+        sys.modules['basicsr'] = Mock()
+        sys.modules['basicsr.archs'] = Mock()
+        sys.modules['basicsr.archs.rrdbnet_arch'] = Mock()
+        sys.modules['realesrgan'] = Mock()
+
+        docker_dir = Path(__file__).parent.parent / 'docker'
+        sys.path.insert(0, str(docker_dir))
+
+        from handler import handler
+
+        # Create fake input ZIP
+        input_zip = tmp_path / "input.zip"
+        with zipfile.ZipFile(input_zip, 'w') as zf:
+            zf.writestr("image1.png", b"fake png")
+
+        # Mock requests
+        mock_response = Mock()
+        mock_response.content = input_zip.read_bytes()
+        mock_response.raise_for_status = Mock()
+
+        # Mock GCS
+        mock_blob = Mock()
+        mock_blob.generate_signed_url = Mock(return_value="https://signed-url.gcs/output.zip")
+        mock_bucket = Mock()
+        mock_bucket.blob = Mock(return_value=mock_blob)
+        mock_client = Mock()
+        mock_client.bucket = Mock(return_value=mock_bucket)
+
+        mock_upsampler = Mock()
+        mock_upsampler.enhance = Mock(return_value=("fake_output", None))
+
+        with patch('handler.requests.get', return_value=mock_response):
+            with patch('handler.storage.Client', return_value=mock_client):
+                with patch('handler.RealESRGANer', return_value=mock_upsampler):
+                    with patch('handler.RRDBNet'):
+                        with patch('handler.cv2.imread', return_value="fake_img"):
+                            with patch('handler.cv2.imwrite'):
+                                job = {
+                                    'input': {
+                                        'input_url': 'https://storage.googleapis.com/bucket/input.zip',
+                                        'output_bucket': 'test-bucket',
+                                        'output_path': 'test/output.zip',
+                                        'model_name': 'net_g_1000000'
+                                    }
+                                }
+
+                                result = handler(job)
+
+                                # Verify GCS upload happened
+                                mock_bucket.blob.assert_called()
+                                mock_blob.upload_from_filename.assert_called()
+                                # Verify signed URL is returned
+                                assert 'output' in result
+                                assert 'output_url' in result['output']
+                                assert result['output']['output_url'] == "https://signed-url.gcs/output.zip"
