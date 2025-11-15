@@ -9,6 +9,26 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 import zipfile
 import tempfile
+import sys
+
+
+@pytest.fixture(autouse=True)
+def mock_realesrgan_imports():
+    """Automatically mock Real-ESRGAN imports for all tests"""
+    sys.modules['basicsr'] = Mock()
+    sys.modules['basicsr.archs'] = Mock()
+    sys.modules['basicsr.archs.rrdbnet_arch'] = Mock()
+    sys.modules['realesrgan'] = Mock()
+    yield
+    # Cleanup
+    if 'basicsr' in sys.modules:
+        del sys.modules['basicsr']
+    if 'basicsr.archs' in sys.modules:
+        del sys.modules['basicsr.archs']
+    if 'basicsr.archs.rrdbnet_arch' in sys.modules:
+        del sys.modules['basicsr.archs.rrdbnet_arch']
+    if 'realesrgan' in sys.modules:
+        del sys.modules['realesrgan']
 
 
 class TestHandlerValidation:
