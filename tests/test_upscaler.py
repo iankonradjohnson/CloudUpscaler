@@ -35,3 +35,20 @@ class TestUpscaleImages:
                 input_dir=empty_dir,
                 output_dir=Path("/tmp/output")
             )
+
+    def test_rejects_too_many_files(self, tmp_path):
+        """Edge case: more than 1000 PNG files (per requirements)"""
+        from cloud_upscaler import upscale_images
+
+        dir_with_many = tmp_path / "many"
+        dir_with_many.mkdir()
+
+        # Create 1001 PNG files
+        for i in range(1001):
+            (dir_with_many / f"image_{i:04d}.png").touch()
+
+        with pytest.raises(ValueError, match="Too many PNG files"):
+            upscale_images(
+                input_dir=dir_with_many,
+                output_dir=Path("/tmp/output")
+            )
