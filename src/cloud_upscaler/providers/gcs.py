@@ -4,6 +4,8 @@ Google Cloud Storage provider.
 
 from google.cloud import storage
 from datetime import timedelta
+from pathlib import Path
+import requests
 
 
 class GoogleCloudStorageProvider:
@@ -29,4 +31,5 @@ class GoogleCloudStorageProvider:
 
     def download(self, remote_url: str, local_path: str):
         """Download file from signed URL"""
-        pass
+        response = requests.get(remote_url)
+        Path(local_path).write_bytes(response.content)

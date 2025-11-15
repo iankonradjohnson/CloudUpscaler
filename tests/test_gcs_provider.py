@@ -34,3 +34,40 @@ def test_uploads_file_to_gcs_and_returns_signed_url():
         # Then
         assert signed_url == "https://storage.googleapis.com/signed-url"
         mock_blob.upload_from_filename.assert_called_once_with("/tmp/test.zip")
+
+
+def test_downloads_file_from_signed_url():
+    """Should download file from signed URL using requests"""
+    from cloud_upscaler.providers.gcs import GoogleCloudStorageProvider
+
+    # Mock the GCS client
+    with patch('cloud_upscaler.providers.gcs.storage.Client') as mock_client_class:
+        mock_client = Mock()
+        mock_bucket = Mock()
+
+        mock_client_class.return_value = mock_client
+        mock_client.bucket.return_value = mock_bucket
+
+        # Given
+        provider = GoogleCloudStorageProvider(
+            bucket_name="test-bucket",
+            project_id="test-project"
+        )
+
+        # Mock requests.get
+        with patch('cloud_upscaler.providers.gcs.requests.get') as mock_get:
+            mock_response = Mock()
+            mock_response.content = b"fake file content"
+            mock_get.return_value = mock_response
+
+            # Mock Path.write_bytes
+            with patch('cloud_upscaler.providers.gcs.Path') as mock_path_class:
+                mock_path = Mock()
+                mock_path_class.return_value = mock_path
+
+                # When
+                provider.download("https://storage.googleapis.com/signed-url", "/tmp/output.zip")
+
+                # Then
+                mock_get.assert_called_once_with("https://storage.googleapis.com/signed-url")
+                mock_path.write_bytes.assert_called_once_with(b"fake file content")
