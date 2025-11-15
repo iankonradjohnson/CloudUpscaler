@@ -31,7 +31,12 @@ class RunPodComputeProvider:
 
     def get_job_status(self, job_id: str) -> str:
         """Get job status from RunPod"""
-        pass
+        response = requests.get(
+            f"{self.base_url}/status/{job_id}",
+            headers={"Authorization": f"Bearer {self.api_key}"}
+        )
+        result = response.json()
+        return result["status"]
 
     def get_job_output_url(self, job_id: str) -> str:
         """Get output URL from completed job"""
