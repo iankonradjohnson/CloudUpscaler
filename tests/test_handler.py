@@ -34,3 +34,27 @@ class TestHandlerValidation:
 
         assert result['error'] is not None
         assert 'input_url' in result['error'].lower()
+
+    def test_rejects_job_without_output_bucket(self):
+        """Edge case: job missing output_bucket should fail clearly"""
+        import sys
+        from pathlib import Path
+
+        # Add docker directory to path
+        docker_dir = Path(__file__).parent.parent / 'docker'
+        sys.path.insert(0, str(docker_dir))
+
+        from handler import handler
+
+        job = {
+            'input': {
+                'input_url': 'https://storage.googleapis.com/bucket/input.zip',
+                'output_path': 'test/output.zip',
+                'model_name': 'net_g_1000000'
+            }
+        }
+
+        result = handler(job)
+
+        assert result['error'] is not None
+        assert 'output_bucket' in result['error'].lower()

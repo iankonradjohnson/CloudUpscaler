@@ -12,10 +12,15 @@ def handler(job):
     try:
         job_input = job['input']
 
-        # Validate input_url
+        # Validate required fields
         if 'input_url' not in job_input:
             return {
                 'error': 'Missing required field: input_url'
+            }
+
+        if 'output_bucket' not in job_input:
+            return {
+                'error': 'Missing required field: output_bucket'
             }
 
         return {
