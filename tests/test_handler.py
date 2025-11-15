@@ -135,3 +135,52 @@ class TestHandlerDownload:
 
                 # Verify download was called
                 mock_get.assert_called_once_with('https://storage.googleapis.com/bucket/input.zip')
+
+    def test_extracts_png_files_from_zip(self, tmp_path):
+        """Handler should extract PNG files from downloaded ZIP"""
+        import sys
+        from pathlib import Path
+
+        # Add docker directory to path
+        docker_dir = Path(__file__).parent.parent / 'docker'
+        sys.path.insert(0, str(docker_dir))
+
+        from handler import handler
+
+        # Create fake input ZIP with PNG files
+        input_zip = tmp_path / "input.zip"
+        with zipfile.ZipFile(input_zip, 'w') as zf:
+            zf.writestr("image1.png", b"fake png 1")
+            zf.writestr("image2.png", b"fake png 2")
+
+        # Mock requests and GCS
+        mock_response = Mock()
+        mock_response.content = input_zip.read_bytes()
+        mock_response.raise_for_status = Mock()
+
+        zipfile_calls = []
+
+        # Wrap ZipFile to track calls
+        original_zipfile = zipfile.ZipFile
+
+        class TrackingZipFile(original_zipfile):
+            def extractall(self, path):
+                zipfile_calls.append(('extractall', path))
+                return super().extractall(path)
+
+        with patch('handler.requests.get', return_value=mock_response):
+            with patch('handler.storage'):
+                with patch('handler.zipfile.ZipFile', TrackingZipFile):
+                    job = {
+                        'input': {
+                            'input_url': 'https://storage.googleapis.com/bucket/input.zip',
+                            'output_bucket': 'test-bucket',
+                            'output_path': 'test/output.zip',
+                            'model_name': 'net_g_1000000'
+                        }
+                    }
+
+                    result = handler(job)
+
+                    # Verify extraction happened
+                    assert len([c for c in zipfile_calls if c[0] == 'extractall']) > 0

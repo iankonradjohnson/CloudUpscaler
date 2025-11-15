@@ -4,6 +4,7 @@ RunPod Serverless handler for Real-ESRGAN image upscaling.
 
 import requests
 import tempfile
+import zipfile
 from pathlib import Path
 from google.cloud import storage
 
@@ -30,13 +31,26 @@ def handler(job):
         output_bucket = job_input['output_bucket']
         output_path = job_input['output_path']
 
-        # Download input ZIP
-        response = requests.get(input_url)
-        response.raise_for_status()
+        # Create temporary directory for processing
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
 
-        return {
-            'output': {}
-        }
+            # Download input ZIP
+            response = requests.get(input_url)
+            response.raise_for_status()
+
+            input_zip_path = temp_path / "input.zip"
+            input_zip_path.write_bytes(response.content)
+
+            # Extract input files
+            input_dir = temp_path / "input"
+            input_dir.mkdir()
+            with zipfile.ZipFile(input_zip_path, 'r') as zf:
+                zf.extractall(input_dir)
+
+            return {
+                'output': {}
+            }
 
     except Exception as e:
         return {
