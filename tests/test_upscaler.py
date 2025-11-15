@@ -52,3 +52,17 @@ class TestUpscaleImages:
                 input_dir=dir_with_many,
                 output_dir=Path("/tmp/output")
             )
+
+    def test_rejects_single_file(self, tmp_path):
+        """Edge case: only 1 PNG file (requirements say 2-1000)"""
+        from cloud_upscaler import upscale_images
+
+        dir_with_one = tmp_path / "one"
+        dir_with_one.mkdir()
+        (dir_with_one / "single.png").touch()
+
+        with pytest.raises(ValueError, match="At least 2 PNG files required"):
+            upscale_images(
+                input_dir=dir_with_one,
+                output_dir=Path("/tmp/output")
+            )

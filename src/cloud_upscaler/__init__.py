@@ -13,5 +13,7 @@ def upscale_images(input_dir: Path, output_dir: Path):
     png_files = list(input_dir.glob("*.png"))
     if not png_files:
         raise ValueError("No PNG files found")
+    if len(png_files) < 2:
+        raise ValueError("At least 2 PNG files required")
     if len(png_files) > 1000:
         raise ValueError("Too many PNG files")
