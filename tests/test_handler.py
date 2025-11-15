@@ -184,3 +184,66 @@ class TestHandlerDownload:
 
                     # Verify extraction happened
                     assert len([c for c in zipfile_calls if c[0] == 'extractall']) > 0
+
+
+class TestHandlerUpscaling:
+    """Test handler upscaling with Real-ESRGAN"""
+
+    def test_upscales_images_with_realesrgan(self, tmp_path):
+        """Handler should upscale extracted PNGs with Real-ESRGAN"""
+        import sys
+        from pathlib import Path
+
+        # Mock Real-ESRGAN imports before loading handler
+        sys.modules['basicsr'] = Mock()
+        sys.modules['basicsr.archs'] = Mock()
+        sys.modules['basicsr.archs.rrdbnet_arch'] = Mock()
+        sys.modules['realesrgan'] = Mock()
+
+        # Add docker directory to path
+        docker_dir = Path(__file__).parent.parent / 'docker'
+        sys.path.insert(0, str(docker_dir))
+
+        from handler import handler
+
+        # Create fake input ZIP
+        input_zip = tmp_path / "input.zip"
+        with zipfile.ZipFile(input_zip, 'w') as zf:
+            zf.writestr("image1.png", b"fake png 1")
+
+        # Mock requests
+        mock_response = Mock()
+        mock_response.content = input_zip.read_bytes()
+        mock_response.raise_for_status = Mock()
+
+        # Track upscaler creation
+        upscaler_created = []
+
+        # Mock RealESRGANer
+        mock_upsampler = Mock()
+        mock_upsampler.enhance = Mock(return_value=(b"upscaled data", None))
+
+        def mock_realesrganer_init(*args, **kwargs):
+            upscaler_created.append(kwargs)
+            return mock_upsampler
+
+        with patch('handler.requests.get', return_value=mock_response):
+            with patch('handler.storage'):
+                with patch('handler.RealESRGANer', side_effect=mock_realesrganer_init):
+                    with patch('handler.RRDBNet'):
+                        with patch('handler.cv2'):
+                            job = {
+                                'input': {
+                                    'input_url': 'https://storage.googleapis.com/bucket/input.zip',
+                                    'output_bucket': 'test-bucket',
+                                    'output_path': 'test/output.zip',
+                                    'model_name': 'net_g_1000000'
+                                }
+                            }
+
+                            result = handler(job)
+
+                            # Verify upscaler was created
+                            assert len(upscaler_created) > 0
+                            # Verify enhance was called
+                            assert mock_upsampler.enhance.called
