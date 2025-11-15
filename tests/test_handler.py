@@ -239,34 +239,38 @@ class TestHandlerUpscaling:
         # Track upscaler creation
         upscaler_created = []
 
-        # Mock RealESRGANer
-        mock_upsampler = Mock()
-        mock_upsampler.enhance = Mock(return_value=(b"upscaled data", None))
+        # Mock ImageUpscaler
+        original_init = None
 
-        def mock_realesrganer_init(*args, **kwargs):
-            upscaler_created.append(kwargs)
-            return mock_upsampler
+        def mock_upscaler_init(self, model_name="net_g_1000000", tile_size=0):
+            upscaler_created.append({'model_name': model_name, 'tile_size': tile_size})
+            self.model_name = model_name
+            self.tile_size = tile_size
+
+        def mock_upscale_directory(self, input_dir, output_dir):
+            # Create fake output files
+            for png in input_dir.glob("*.png"):
+                (output_dir / png.name).write_bytes(b"upscaled data")
+            return list(output_dir.glob("*.png"))
 
         with patch('handler.requests.get', return_value=mock_response):
             with patch('handler.storage'):
-                with patch('handler.RealESRGANer', side_effect=mock_realesrganer_init):
-                    with patch('handler.RRDBNet'):
-                        with patch('handler.cv2'):
-                            job = {
-                                'input': {
-                                    'input_url': 'https://storage.googleapis.com/bucket/input.zip',
-                                    'output_bucket': 'test-bucket',
-                                    'output_path': 'test/output.zip',
-                                    'model_name': 'net_g_1000000'
-                                }
+                with patch.object(sys.modules['image_upscaler'].ImageUpscaler, '__init__', mock_upscaler_init):
+                    with patch.object(sys.modules['image_upscaler'].ImageUpscaler, 'upscale_directory', mock_upscale_directory):
+                        job = {
+                            'input': {
+                                'input_url': 'https://storage.googleapis.com/bucket/input.zip',
+                                'output_bucket': 'test-bucket',
+                                'output_path': 'test/output.zip',
+                                'model_name': 'net_g_1000000'
                             }
+                        }
 
-                            result = handler(job)
+                        result = handler(job)
 
-                            # Verify upscaler was created
-                            assert len(upscaler_created) > 0
-                            # Verify enhance was called
-                            assert mock_upsampler.enhance.called
+                        # Verify upscaler was created
+                        assert len(upscaler_created) > 0
+                        assert upscaler_created[0]['model_name'] == 'net_g_1000000'
 
 
 class TestHandlerOutput:
@@ -307,39 +311,35 @@ class TestHandlerOutput:
             zipfile_calls.append(('init', str(file), mode))
             return original_zipfile_init(self, file, mode, *args, **kwargs)
 
-        mock_upsampler = Mock()
-        # Mock cv2 to actually create a file
-        mock_cv2_imread = Mock(return_value="fake_image_data")
-        mock_cv2_imwrite = Mock()
+        def mock_upscaler_init(self, model_name="net_g_1000000", tile_size=0):
+            self.model_name = model_name
+            self.tile_size = tile_size
+
+        def mock_upscale_directory(self, input_dir, output_dir):
+            # Create fake output files
+            for png in input_dir.glob("*.png"):
+                (output_dir / png.name).write_bytes(b"upscaled data")
+            return list(output_dir.glob("*.png"))
 
         with patch('handler.requests.get', return_value=mock_response):
             with patch('handler.storage'):
-                with patch('handler.RealESRGANer', return_value=mock_upsampler):
-                    with patch('handler.RRDBNet'):
-                        with patch.object(zipfile.ZipFile, '__init__', tracking_init):
-                            with patch('handler.cv2.imread', mock_cv2_imread):
-                                with patch('handler.cv2.imwrite', mock_cv2_imwrite):
-                                    # Mock enhance to create actual output file
-                                    def mock_enhance(img, outscale):
-                                        # Actually create output file
-                                        return ("fake_output_data", None)
+                with patch.object(zipfile.ZipFile, '__init__', tracking_init):
+                    with patch.object(sys.modules['image_upscaler'].ImageUpscaler, '__init__', mock_upscaler_init):
+                        with patch.object(sys.modules['image_upscaler'].ImageUpscaler, 'upscale_directory', mock_upscale_directory):
+                            job = {
+                                'input': {
+                                    'input_url': 'https://storage.googleapis.com/bucket/input.zip',
+                                    'output_bucket': 'test-bucket',
+                                    'output_path': 'test/output.zip',
+                                    'model_name': 'net_g_1000000'
+                                }
+                            }
 
-                                    mock_upsampler.enhance = mock_enhance
+                            result = handler(job)
 
-                                    job = {
-                                        'input': {
-                                            'input_url': 'https://storage.googleapis.com/bucket/input.zip',
-                                            'output_bucket': 'test-bucket',
-                                            'output_path': 'test/output.zip',
-                                            'model_name': 'net_g_1000000'
-                                        }
-                                    }
-
-                                    result = handler(job)
-
-                                    # Verify output ZIP was created (mode='w')
-                                    output_zips = [c for c in zipfile_calls if 'output.zip' in c[1] and c[2] == 'w']
-                                    assert len(output_zips) > 0
+                            # Verify output ZIP was created (mode='w')
+                            output_zips = [c for c in zipfile_calls if 'output.zip' in c[1] and c[2] == 'w']
+                            assert len(output_zips) > 0
 
     def test_uploads_to_gcs_and_returns_signed_url(self, tmp_path):
         """Handler should upload output ZIP to GCS and return signed URL"""
@@ -375,30 +375,35 @@ class TestHandlerOutput:
         mock_client = Mock()
         mock_client.bucket = Mock(return_value=mock_bucket)
 
-        mock_upsampler = Mock()
-        mock_upsampler.enhance = Mock(return_value=("fake_output", None))
+        def mock_upscaler_init(self, model_name="net_g_1000000", tile_size=0):
+            self.model_name = model_name
+            self.tile_size = tile_size
+
+        def mock_upscale_directory(self, input_dir, output_dir):
+            # Create fake output files
+            for png in input_dir.glob("*.png"):
+                (output_dir / png.name).write_bytes(b"upscaled data")
+            return list(output_dir.glob("*.png"))
 
         with patch('handler.requests.get', return_value=mock_response):
             with patch('handler.storage.Client', return_value=mock_client):
-                with patch('handler.RealESRGANer', return_value=mock_upsampler):
-                    with patch('handler.RRDBNet'):
-                        with patch('handler.cv2.imread', return_value="fake_img"):
-                            with patch('handler.cv2.imwrite'):
-                                job = {
-                                    'input': {
-                                        'input_url': 'https://storage.googleapis.com/bucket/input.zip',
-                                        'output_bucket': 'test-bucket',
-                                        'output_path': 'test/output.zip',
-                                        'model_name': 'net_g_1000000'
-                                    }
-                                }
+                with patch.object(sys.modules['image_upscaler'].ImageUpscaler, '__init__', mock_upscaler_init):
+                    with patch.object(sys.modules['image_upscaler'].ImageUpscaler, 'upscale_directory', mock_upscale_directory):
+                        job = {
+                            'input': {
+                                'input_url': 'https://storage.googleapis.com/bucket/input.zip',
+                                'output_bucket': 'test-bucket',
+                                'output_path': 'test/output.zip',
+                                'model_name': 'net_g_1000000'
+                            }
+                        }
 
-                                result = handler(job)
+                        result = handler(job)
 
-                                # Verify GCS upload happened
-                                mock_bucket.blob.assert_called()
-                                mock_blob.upload_from_filename.assert_called()
-                                # Verify signed URL is returned
-                                assert 'output' in result
-                                assert 'output_url' in result['output']
-                                assert result['output']['output_url'] == "https://signed-url.gcs/output.zip"
+                        # Verify GCS upload happened
+                        mock_bucket.blob.assert_called()
+                        mock_blob.upload_from_filename.assert_called()
+                        # Verify signed URL is returned
+                        assert 'output' in result
+                        assert 'output_url' in result['output']
+                        assert result['output']['output_url'] == "https://signed-url.gcs/output.zip"
