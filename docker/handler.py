@@ -13,6 +13,8 @@ from realesrgan import RealESRGANer
 from zip_extractor import ZipExtractor
 from zip_creator import ZipCreator
 from image_upscaler import ImageUpscaler
+from cloud_storage import CloudStorage
+from image_downloader import ImageDownloader
 
 
 def handler(job):
@@ -42,11 +44,9 @@ def handler(job):
             temp_path = Path(temp_dir)
 
             # Download input ZIP
-            response = requests.get(input_url)
-            response.raise_for_status()
-
             input_zip_path = temp_path / "input.zip"
-            input_zip_path.write_bytes(response.content)
+            downloader = ImageDownloader()
+            downloader.download(input_url, input_zip_path)
 
             # Extract input files
             input_dir = temp_path / "input"
@@ -71,18 +71,8 @@ def handler(job):
             creator.create(output_files, output_zip_path)
 
             # Upload to GCS
-            client = storage.Client()
-            bucket = client.bucket(output_bucket)
-            blob = bucket.blob(output_path)
-            blob.upload_from_filename(str(output_zip_path))
-
-            # Generate signed URL
-            from datetime import timedelta
-            output_url = blob.generate_signed_url(
-                version="v4",
-                expiration=timedelta(hours=1),
-                method="GET"
-            )
+            cloud = CloudStorage()
+            output_url = cloud.upload_and_get_url(output_zip_path, output_bucket, output_path)
 
             return {
                 'output': {
