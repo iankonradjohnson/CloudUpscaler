@@ -242,3 +242,42 @@ class TestCloudProcessing:
                 assert not Path(temp_file).exists(), f"Temp file {temp_file} was not cleaned up"
         finally:
             tempfile.NamedTemporaryFile = original_namedtemporaryfile
+
+
+class TestProviderAbstraction:
+    """Test provider abstraction per Story 4"""
+
+    def test_accepts_custom_storage_provider(self, tmp_path):
+        """Per Story 4: Should accept custom storage provider"""
+        from cloud_upscaler import upscale_images
+
+        # Simple fake storage provider
+        class FakeStorageProvider:
+            def __init__(self):
+                self.uploaded_files = []
+                self.downloaded_files = []
+
+            def upload(self, local_path, remote_path):
+                self.uploaded_files.append((local_path, remote_path))
+                return f"fake://storage/{remote_path}"
+
+            def download(self, remote_url, local_path):
+                self.downloaded_files.append((remote_url, local_path))
+
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        (input_dir / "page1.png").write_bytes(b"data1")
+        (input_dir / "page2.png").write_bytes(b"data2")
+
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        fake_storage = FakeStorageProvider()
+
+        result = upscale_images(
+            input_dir=input_dir,
+            output_dir=output_dir,
+            storage_provider=fake_storage
+        )
+
+        assert result.success is True
