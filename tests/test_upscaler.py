@@ -66,3 +66,19 @@ class TestUpscaleImages:
                 input_dir=dir_with_one,
                 output_dir=Path("/tmp/output")
             )
+
+    def test_upscales_two_files_successfully(self, tmp_path):
+        """Happy path: upscale 2 PNG files"""
+        from cloud_upscaler import upscale_images
+
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        (input_dir / "page1.png").write_bytes(b"fake png 1")
+        (input_dir / "page2.png").write_bytes(b"fake png 2")
+
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = upscale_images(input_dir=input_dir, output_dir=output_dir)
+
+        assert result.success is True

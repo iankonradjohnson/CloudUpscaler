@@ -2,10 +2,17 @@
 CloudUpscaler - Upscale images using cloud GPU processing.
 """
 
+from dataclasses import dataclass
 from pathlib import Path
 
 
-def upscale_images(input_dir: Path, output_dir: Path):
+@dataclass
+class UpscaleResult:
+    """Result of upscaling operation"""
+    success: bool
+
+
+def upscale_images(input_dir: Path, output_dir: Path) -> UpscaleResult:
     """Upscale images from input_dir to output_dir"""
     if not input_dir.exists():
         raise ValueError("Input directory does not exist")
@@ -17,3 +24,5 @@ def upscale_images(input_dir: Path, output_dir: Path):
         raise ValueError("At least 2 PNG files required")
     if len(png_files) > 1000:
         raise ValueError("Too many PNG files")
+
+    return UpscaleResult(success=True)
