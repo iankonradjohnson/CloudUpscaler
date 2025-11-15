@@ -112,3 +112,9 @@ def handler(job):
         return {
             'error': str(e)
         }
+
+
+# Start RunPod serverless handler
+if __name__ == "__main__":
+    import runpod
+    runpod.serverless.start({"handler": handler})
