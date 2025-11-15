@@ -117,3 +117,20 @@ class TestUpscaleImages:
 
         # Upscaled files should be larger than originals
         assert (output_dir / "page1.png").stat().st_size > len(small_data)
+
+    def test_tracks_files_processed_in_result(self, tmp_path):
+        """Result should include count of images processed"""
+        from cloud_upscaler import upscale_images
+
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        (input_dir / "page1.png").write_bytes(b"data1")
+        (input_dir / "page2.png").write_bytes(b"data2")
+        (input_dir / "page3.png").write_bytes(b"data3")
+
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = upscale_images(input_dir=input_dir, output_dir=output_dir)
+
+        assert result.images_processed == 3

@@ -10,6 +10,7 @@ from pathlib import Path
 class UpscaleResult:
     """Result of upscaling operation"""
     success: bool
+    images_processed: int = 0
 
 
 def upscale_images(input_dir: Path, output_dir: Path) -> UpscaleResult:
@@ -33,4 +34,4 @@ def upscale_images(input_dir: Path, output_dir: Path) -> UpscaleResult:
         upscaled_data = original_data + b" [UPSCALED]"
         output_file.write_bytes(upscaled_data)
 
-    return UpscaleResult(success=True)
+    return UpscaleResult(success=True, images_processed=len(png_files))
