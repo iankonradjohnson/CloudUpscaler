@@ -1,12 +1,11 @@
 """
-CloudUpscaler - Provider-agnostic cloud GPU upscaling service.
-
-Clean architecture implementation following SOLID principles.
+CloudUpscaler - Upscale images using cloud GPU processing.
 """
 
-__version__ = "1.0.0"
+from pathlib import Path
 
-# Convenience imports (will add as we build)
-# from .infrastructure.composition_root import create_pipeline
 
-__all__ = ["__version__"]
+def upscale_images(input_dir: Path, output_dir: Path):
+    """Upscale images from input_dir to output_dir"""
+    if not input_dir.exists():
+        raise ValueError("Input directory does not exist")
