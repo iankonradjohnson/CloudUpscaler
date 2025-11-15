@@ -174,3 +174,39 @@ class TestUpscaleImages:
         )
 
         assert result.success is True
+
+
+class TestCloudProcessing:
+    """Test cloud processing pipeline"""
+
+    def test_creates_zip_archive_of_input_files(self, tmp_path):
+        """Should zip PNG files before uploading to cloud"""
+        from cloud_upscaler import upscale_images
+        import zipfile
+
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        (input_dir / "page1.png").write_bytes(b"fake png 1")
+        (input_dir / "page2.png").write_bytes(b"fake png 2")
+
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        # Create a mock that tracks if zip was created
+        zip_created = []
+
+        # Monkey patch zipfile.ZipFile to track creation
+        original_zipfile = zipfile.ZipFile
+
+        def tracking_zipfile(*args, **kwargs):
+            if len(args) > 0 and str(args[0]).endswith('.zip'):
+                zip_created.append(str(args[0]))
+            return original_zipfile(*args, **kwargs)
+
+        zipfile.ZipFile = tracking_zipfile
+        try:
+            upscale_images(input_dir=input_dir, output_dir=output_dir)
+            # Should have created a zip file
+            assert len(zip_created) > 0
+        finally:
+            zipfile.ZipFile = original_zipfile

@@ -4,6 +4,8 @@ CloudUpscaler - Upscale images using cloud GPU processing.
 
 from dataclasses import dataclass
 from pathlib import Path
+import zipfile
+import tempfile
 
 
 @dataclass
@@ -31,6 +33,14 @@ def upscale_images(
     if len(png_files) > 1000:
         raise ValueError("Too many PNG files")
 
+    # Create temporary zip file of input images
+    with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as tmp_zip:
+        zip_path = Path(tmp_zip.name)
+
+    with zipfile.ZipFile(zip_path, 'w') as zf:
+        for png_file in png_files:
+            zf.write(png_file, png_file.name)
+
     # Simulate upscaling by making files larger (stub for real cloud processing)
     for png_file in png_files:
         output_file = output_dir / png_file.name
@@ -38,5 +48,8 @@ def upscale_images(
         # Simulate upscaling: make file 2x larger
         upscaled_data = original_data + b" [UPSCALED]"
         output_file.write_bytes(upscaled_data)
+
+    # Clean up zip file
+    zip_path.unlink()
 
     return UpscaleResult(success=True, images_processed=len(png_files))
