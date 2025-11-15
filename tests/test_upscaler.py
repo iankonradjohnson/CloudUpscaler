@@ -22,3 +22,16 @@ class TestUpscaleImages:
                 input_dir=nonexistent,
                 output_dir=Path("/tmp/output")
             )
+
+    def test_rejects_directory_with_no_png_files(self, tmp_path):
+        """Edge case: input_dir exists but has no PNG files"""
+        from cloud_upscaler import upscale_images
+
+        empty_dir = tmp_path / "empty"
+        empty_dir.mkdir()
+
+        with pytest.raises(ValueError, match="No PNG files found"):
+            upscale_images(
+                input_dir=empty_dir,
+                output_dir=Path("/tmp/output")
+            )
