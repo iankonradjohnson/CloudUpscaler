@@ -99,3 +99,21 @@ class TestUpscaleImages:
 
         assert (output_dir / "page1.png").exists()
         assert (output_dir / "page2.png").exists()
+
+    def test_upscaled_files_are_larger_than_input(self, tmp_path):
+        """Verify actual upscaling occurred (files should be larger)"""
+        from cloud_upscaler import upscale_images
+
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        small_data = b"small"
+        (input_dir / "page1.png").write_bytes(small_data)
+        (input_dir / "page2.png").write_bytes(small_data)
+
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        upscale_images(input_dir=input_dir, output_dir=output_dir)
+
+        # Upscaled files should be larger than originals
+        assert (output_dir / "page1.png").stat().st_size > len(small_data)
