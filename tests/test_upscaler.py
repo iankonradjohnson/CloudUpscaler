@@ -77,6 +77,30 @@ class FakeStorageProvider:
         Path(local_path).write_bytes(b"fake upscaled zip")
 
 
+class FakeComputeProvider:
+    """Fake compute provider for testing"""
+    def __init__(self):
+        self.submitted_jobs = []
+        self.job_status = "COMPLETED"
+        self.output_url = "fake://storage/output.zip"
+
+    def submit_job(self, input_url, model_name, timeout_seconds):
+        job_id = f"fake-job-{len(self.submitted_jobs)}"
+        self.submitted_jobs.append({
+            "job_id": job_id,
+            "input_url": input_url,
+            "model_name": model_name,
+            "timeout_seconds": timeout_seconds
+        })
+        return job_id
+
+    def get_job_status(self, job_id):
+        return self.job_status
+
+    def get_job_output_url(self, job_id):
+        return self.output_url
+
+
 def when_upscaling_images(context: TestContext, **kwargs):
     """Perform upscaling operation"""
     from cloud_upscaler import upscale_images
@@ -114,6 +138,14 @@ def then_storage_provider_uploaded_zip(storage_provider: FakeStorageProvider):
     assert len(storage_provider.uploaded_files) > 0
     uploaded_path, remote_path = storage_provider.uploaded_files[0]
     assert uploaded_path.endswith('.zip')
+
+
+def then_compute_provider_received_job(compute_provider: FakeComputeProvider):
+    """Verify compute provider received a job submission"""
+    assert len(compute_provider.submitted_jobs) > 0
+    job = compute_provider.submitted_jobs[0]
+    assert "input_url" in job
+    assert "model_name" in job
 
 
 class TestUpscaleImages:
@@ -293,3 +325,17 @@ class TestProviderAbstraction:
         when_upscaling_images(context, storage_provider=fake_storage)
 
         then_storage_provider_uploaded_zip(fake_storage)
+
+    def test_submits_job_to_compute_provider(self, tmp_path):
+        """Should submit upscaling job to compute provider"""
+        context = given_directory_with_png_images(tmp_path, count=2)
+        fake_storage = FakeStorageProvider()
+        fake_compute = FakeComputeProvider()
+
+        when_upscaling_images(
+            context,
+            storage_provider=fake_storage,
+            compute_provider=fake_compute
+        )
+
+        then_compute_provider_received_job(fake_compute)

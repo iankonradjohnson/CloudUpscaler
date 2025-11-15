@@ -20,7 +20,8 @@ def upscale_images(
     output_dir: Path,
     model_name: str = "net_g_1000000",
     timeout_seconds: int = 3600,
-    storage_provider = None
+    storage_provider = None,
+    compute_provider = None
 ) -> UpscaleResult:
     """Upscale images from input_dir to output_dir"""
     if not input_dir.exists():
@@ -45,6 +46,10 @@ def upscale_images(
     # Upload zip if storage provider provided
     if storage_provider:
         remote_url = storage_provider.upload(str(zip_path), "input.zip")
+
+    # Submit job to compute provider if provided
+    if compute_provider and storage_provider:
+        job_id = compute_provider.submit_job(remote_url, model_name, timeout_seconds)
 
     # Simulate upscaling by making files larger (stub for real cloud processing)
     for png_file in png_files:
