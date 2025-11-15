@@ -185,6 +185,11 @@ def then_job_was_polled_multiple_times(compute_provider: FakeComputeProvider):
     assert len(compute_provider.status_checks) >= 3
 
 
+def then_error_indicates_timeout(result):
+    """Verify result error indicates timeout"""
+    assert "timeout" in result.error.lower() or "timed out" in result.error.lower()
+
+
 class TestUpscaleImages:
     """Test the main upscale_images function"""
 
@@ -448,3 +453,21 @@ class TestProviderAbstraction:
         )
 
         then_job_was_polled_multiple_times(fake_compute)
+
+    def test_handles_job_timeout_gracefully(self, tmp_path):
+        """Per Story 2: If job times out, I'm notified"""
+        context = given_directory_with_png_images(tmp_path, count=2)
+        fake_storage = FakeStorageProvider()
+        fake_compute = FakeComputeProvider()
+        # Simulate job that never completes
+        fake_compute.job_status = "IN_PROGRESS"
+
+        result = when_upscaling_images(
+            context,
+            storage_provider=fake_storage,
+            compute_provider=fake_compute,
+            timeout_seconds=1  # Very short timeout
+        )
+
+        then_result_indicates_failure(result)
+        then_error_indicates_timeout(result)

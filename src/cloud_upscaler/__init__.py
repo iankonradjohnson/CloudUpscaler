@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import zipfile
 import tempfile
+import time
 
 
 @dataclass
@@ -53,7 +54,14 @@ def upscale_images(
         job_id = compute_provider.submit_job(remote_url, model_name, timeout_seconds)
 
         # Poll for job completion
+        start_time = time.time()
         while True:
+            # Check for timeout
+            elapsed = time.time() - start_time
+            if elapsed > timeout_seconds:
+                zip_path.unlink()
+                return UpscaleResult(success=False, error=f"Job timed out after {timeout_seconds} seconds")
+
             status = compute_provider.get_job_status(job_id)
 
             # Check for job failure
