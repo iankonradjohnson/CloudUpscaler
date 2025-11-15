@@ -154,3 +154,23 @@ class TestUpscaleImages:
         )
 
         assert result.success is True
+
+    def test_accepts_timeout_parameter(self, tmp_path):
+        """Should accept timeout_seconds parameter per requirements"""
+        from cloud_upscaler import upscale_images
+
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        (input_dir / "page1.png").write_bytes(b"data1")
+        (input_dir / "page2.png").write_bytes(b"data2")
+
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = upscale_images(
+            input_dir=input_dir,
+            output_dir=output_dir,
+            timeout_seconds=1800
+        )
+
+        assert result.success is True

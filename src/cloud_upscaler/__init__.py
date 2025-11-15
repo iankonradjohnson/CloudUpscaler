@@ -16,7 +16,8 @@ class UpscaleResult:
 def upscale_images(
     input_dir: Path,
     output_dir: Path,
-    model_name: str = "net_g_1000000"
+    model_name: str = "net_g_1000000",
+    timeout_seconds: int = 3600
 ) -> UpscaleResult:
     """Upscale images from input_dir to output_dir"""
     if not input_dir.exists():
