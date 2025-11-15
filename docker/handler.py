@@ -13,15 +13,12 @@ def handler(job):
         job_input = job['input']
 
         # Validate required fields
-        if 'input_url' not in job_input:
-            return {
-                'error': 'Missing required field: input_url'
-            }
-
-        if 'output_bucket' not in job_input:
-            return {
-                'error': 'Missing required field: output_bucket'
-            }
+        required_fields = ['input_url', 'output_bucket', 'output_path']
+        for field in required_fields:
+            if field not in job_input:
+                return {
+                    'error': f'Missing required field: {field}'
+                }
 
         return {
             'output': {}
