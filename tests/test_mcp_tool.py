@@ -15,6 +15,8 @@ def test_upscale_images_sync_calls_upscale_images_with_real_providers():
     with patch.dict('os.environ', {
         'RUNPOD_API_KEY': 'test-runpod-key',
         'RUNPOD_ENDPOINT_ID': 'test-endpoint',
+        'RUNPOD_OUTPUT_BUCKET': 'test-output-bucket',
+        'RUNPOD_OUTPUT_PATH': 'outputs/results',
         'GCS_BUCKET_NAME': 'test-bucket',
         'GCS_PROJECT_ID': 'test-project'
     }):
@@ -38,7 +40,9 @@ def test_upscale_images_sync_calls_upscale_images_with_real_providers():
             # Then
             mock_runpod_class.assert_called_once_with(
                 api_key='test-runpod-key',
-                endpoint_id='test-endpoint'
+                endpoint_id='test-endpoint',
+                output_bucket='test-output-bucket',
+                output_path='outputs/results'
             )
             mock_gcs_class.assert_called_once_with(
                 bucket_name='test-bucket',

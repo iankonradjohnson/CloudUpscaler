@@ -51,7 +51,7 @@ def upscale_images(
 
     # Submit job to compute provider if provided
     if compute_provider and storage_provider:
-        job_id = compute_provider.submit_job(remote_url, model_name, timeout_seconds)
+        job_id = compute_provider.submit_job(remote_url, model_name)
 
         # Poll for job completion
         start_time = time.time()

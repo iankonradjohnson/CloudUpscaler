@@ -31,19 +31,25 @@ def upscale_images_sync(image_dir: str, output_dir: str) -> dict:
     Environment variables required:
         RUNPOD_API_KEY: RunPod API key
         RUNPOD_ENDPOINT_ID: RunPod endpoint ID
+        RUNPOD_OUTPUT_BUCKET: GCS bucket name for RunPod outputs
+        RUNPOD_OUTPUT_PATH: Path in bucket for RunPod outputs
         GCS_BUCKET_NAME: Google Cloud Storage bucket name
         GCS_PROJECT_ID: Google Cloud project ID
     """
     # Get credentials from environment
     runpod_api_key = os.environ['RUNPOD_API_KEY']
     runpod_endpoint_id = os.environ['RUNPOD_ENDPOINT_ID']
+    runpod_output_bucket = os.environ['RUNPOD_OUTPUT_BUCKET']
+    runpod_output_path = os.environ['RUNPOD_OUTPUT_PATH']
     gcs_bucket_name = os.environ['GCS_BUCKET_NAME']
     gcs_project_id = os.environ['GCS_PROJECT_ID']
 
     # Initialize providers
     compute_provider = RunPodComputeProvider(
         api_key=runpod_api_key,
-        endpoint_id=runpod_endpoint_id
+        endpoint_id=runpod_endpoint_id,
+        output_bucket=runpod_output_bucket,
+        output_path=runpod_output_path
     )
     storage_provider = GoogleCloudStorageProvider(
         bucket_name=gcs_bucket_name,

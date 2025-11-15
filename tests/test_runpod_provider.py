@@ -7,13 +7,15 @@ from unittest.mock import Mock, patch
 
 
 def test_submits_job_to_runpod_api():
-    """Should submit job to RunPod /run endpoint"""
+    """Should submit job to RunPod /run endpoint with correct payload"""
     from cloud_upscaler.providers.runpod import RunPodComputeProvider
 
     # Given
     provider = RunPodComputeProvider(
         api_key="test-api-key",
-        endpoint_id="test-endpoint"
+        endpoint_id="test-endpoint",
+        output_bucket="test-bucket",
+        output_path="output/results"
     )
 
     # Mock the HTTP client
@@ -26,13 +28,24 @@ def test_submits_job_to_runpod_api():
         # When
         job_id = provider.submit_job(
             input_url="https://storage.googleapis.com/input.zip",
-            model_name="net_g_1000000",
-            timeout_seconds=3600
+            model_name="net_g_1000000"
         )
 
         # Then
         assert job_id == "job-123"
-        mock_post.assert_called_once()
+
+        # Verify correct payload was sent
+        call_args = mock_post.call_args
+        assert call_args[1]['json'] == {
+            "input": {
+                "input_url": "https://storage.googleapis.com/input.zip",
+                "output_bucket": "test-bucket",
+                "output_path": "output/results",
+                "model_name": "net_g_1000000",
+                "tile_size": 0,
+                "gpu_count": 1
+            }
+        }
 
 
 def test_gets_job_status_from_runpod_api():
@@ -42,7 +55,9 @@ def test_gets_job_status_from_runpod_api():
     # Given
     provider = RunPodComputeProvider(
         api_key="test-api-key",
-        endpoint_id="test-endpoint"
+        endpoint_id="test-endpoint",
+        output_bucket="test-bucket",
+        output_path="output/results"
     )
 
     # Mock the HTTP client
@@ -67,7 +82,9 @@ def test_gets_output_url_from_completed_job():
     # Given
     provider = RunPodComputeProvider(
         api_key="test-api-key",
-        endpoint_id="test-endpoint"
+        endpoint_id="test-endpoint",
+        output_bucket="test-bucket",
+        output_path="output/results"
     )
 
     # Mock the HTTP client

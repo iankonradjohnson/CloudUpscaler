@@ -90,13 +90,12 @@ class FakeComputeProvider:
         self.output_url = "fake://storage/output.zip"
         self.status_checks = []  # Track how many times status was checked
 
-    def submit_job(self, input_url, model_name, timeout_seconds):
+    def submit_job(self, input_url, model_name):
         job_id = f"fake-job-{len(self.submitted_jobs)}"
         self.submitted_jobs.append({
             "job_id": job_id,
             "input_url": input_url,
-            "model_name": model_name,
-            "timeout_seconds": timeout_seconds
+            "model_name": model_name
         })
         return job_id
 

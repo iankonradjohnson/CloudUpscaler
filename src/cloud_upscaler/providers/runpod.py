@@ -8,12 +8,14 @@ import requests
 class RunPodComputeProvider:
     """RunPod Serverless API client"""
 
-    def __init__(self, api_key: str, endpoint_id: str):
+    def __init__(self, api_key: str, endpoint_id: str, output_bucket: str, output_path: str):
         self.api_key = api_key
         self.endpoint_id = endpoint_id
+        self.output_bucket = output_bucket
+        self.output_path = output_path
         self.base_url = f"https://api.runpod.ai/v2/{endpoint_id}"
 
-    def submit_job(self, input_url: str, model_name: str, timeout_seconds: int) -> str:
+    def submit_job(self, input_url: str, model_name: str) -> str:
         """Submit upscaling job to RunPod"""
         response = requests.post(
             f"{self.base_url}/run",
@@ -21,8 +23,11 @@ class RunPodComputeProvider:
             json={
                 "input": {
                     "input_url": input_url,
+                    "output_bucket": self.output_bucket,
+                    "output_path": self.output_path,
                     "model_name": model_name,
-                    "timeout_seconds": timeout_seconds
+                    "tile_size": 0,
+                    "gpu_count": 1
                 }
             }
         )
