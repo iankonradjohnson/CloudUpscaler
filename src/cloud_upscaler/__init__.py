@@ -13,7 +13,11 @@ class UpscaleResult:
     images_processed: int = 0
 
 
-def upscale_images(input_dir: Path, output_dir: Path) -> UpscaleResult:
+def upscale_images(
+    input_dir: Path,
+    output_dir: Path,
+    model_name: str = "net_g_1000000"
+) -> UpscaleResult:
     """Upscale images from input_dir to output_dir"""
     if not input_dir.exists():
         raise ValueError("Input directory does not exist")
