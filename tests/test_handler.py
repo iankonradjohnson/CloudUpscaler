@@ -77,6 +77,88 @@ class TestHandlerValidation:
         assert 'tile_size' in result['error'].lower()
         assert '32' in result['error'] or 'minimum' in result['error'].lower()
 
+    def test_accepts_valid_tile_size_zero(self, tmp_path):
+        """Valid case: tile_size=0 (no tiling) should be accepted"""
+        import sys
+        from pathlib import Path
+
+        # Add docker directory to path
+        docker_dir = Path(__file__).parent.parent / 'docker'
+        sys.path.insert(0, str(docker_dir))
+
+        from handler import Handler
+        from image_downloader import ImageDownloader
+        from zip_extractor import ZipExtractor
+        from image_upscaler import ImageUpscaler
+        from zip_creator import ZipCreator
+        from cloud_storage import CloudStorage
+
+        # Given: handler with dependencies
+        handler = Handler(
+            downloader=ImageDownloader(),
+            extractor=ZipExtractor(),
+            upscaler=ImageUpscaler(),
+            creator=ZipCreator(),
+            storage=CloudStorage()
+        )
+
+        # When: job submitted with tile_size=0 (explicit no tiling)
+        job = {
+            'input': {
+                'input_url': 'https://example.com/input.zip',
+                'output_bucket': 'test-bucket',
+                'output_path': 'output.zip',
+                'tile_size': 0  # Valid: no tiling
+            }
+        }
+
+        # Then: should NOT reject due to tile_size validation
+        result = handler.handle(job)
+        # It will fail later (404 on URL), but NOT on tile_size validation
+        if 'error' in result:
+            assert 'tile_size' not in result['error'].lower()
+
+    def test_accepts_valid_tile_size_at_minimum(self, tmp_path):
+        """Valid case: tile_size=32 (minimum for tiling) should be accepted"""
+        import sys
+        from pathlib import Path
+
+        # Add docker directory to path
+        docker_dir = Path(__file__).parent.parent / 'docker'
+        sys.path.insert(0, str(docker_dir))
+
+        from handler import Handler
+        from image_downloader import ImageDownloader
+        from zip_extractor import ZipExtractor
+        from image_upscaler import ImageUpscaler
+        from zip_creator import ZipCreator
+        from cloud_storage import CloudStorage
+
+        # Given: handler with dependencies
+        handler = Handler(
+            downloader=ImageDownloader(),
+            extractor=ZipExtractor(),
+            upscaler=ImageUpscaler(),
+            creator=ZipCreator(),
+            storage=CloudStorage()
+        )
+
+        # When: job submitted with tile_size=32 (minimum valid tiling)
+        job = {
+            'input': {
+                'input_url': 'https://example.com/input.zip',
+                'output_bucket': 'test-bucket',
+                'output_path': 'output.zip',
+                'tile_size': 32  # Valid: minimum tile size
+            }
+        }
+
+        # Then: should NOT reject due to tile_size validation
+        result = handler.handle(job)
+        # It will fail later (404 on URL), but NOT on tile_size validation
+        if 'error' in result:
+            assert 'tile_size' not in result['error'].lower()
+
     def test_rejects_job_without_input_url(self, tmp_path):
         """Edge case: job missing input_url should fail clearly"""
         import sys
