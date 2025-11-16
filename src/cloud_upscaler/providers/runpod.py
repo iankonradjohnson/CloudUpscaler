@@ -50,4 +50,27 @@ class RunPodComputeProvider:
             headers={"Authorization": f"Bearer {self.api_key}"}
         )
         result = response.json()
-        return result["output"]["output_url"]
+
+        # Handle RunPod's response wrapping
+        # RunPod wraps handler output: {"output": <handler_output>}
+        # Our handler returns: {"output": {"output_url": "..."}}
+        # So final structure is: {"output": {"output": {"output_url": "..."}}}
+
+        if "output" in result:
+            output = result["output"]
+
+            # Check for double-nested output (RunPod wrapping)
+            if isinstance(output, dict) and "output" in output:
+                inner_output = output["output"]
+                if isinstance(inner_output, dict) and "output_url" in inner_output:
+                    return inner_output["output_url"]
+
+            # Check for single-nested output
+            if isinstance(output, dict) and "output_url" in output:
+                return output["output_url"]
+
+            # Direct string output
+            if isinstance(output, str):
+                return output
+
+        raise KeyError(f"Could not find output_url in response. Response: {result}")

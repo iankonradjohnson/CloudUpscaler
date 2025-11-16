@@ -1,8 +1,11 @@
 """
 Image upscaling using Real-ESRGAN.
+Uses PIL/Pillow instead of OpenCV to avoid OpenGL dependencies.
 """
 
-import cv2
+import numpy as np
+import torch
+from PIL import Image
 from pathlib import Path
 from basicsr.archs.rrdbnet_arch import RRDBNet
 from realesrgan import RealESRGANer
@@ -11,17 +14,28 @@ from realesrgan import RealESRGANer
 class ImageUpscaler:
     """Upscales images using Real-ESRGAN."""
 
-    def __init__(self, model_name: str = "net_g_1000000", tile_size: int = 0):
+    def __init__(self, model_name: str = "net_g_1000000", tile_size: int = 0, tile_pad: int = 10, gpu_id: int = 0):
         """
         Initialize upscaler.
 
         Args:
             model_name: Name of the model to use
             tile_size: Tile size for processing (0 = no tiling)
+            tile_pad: Padding for tiles (default 10, use 0 for no padding)
+            gpu_id: GPU ID to use (0-indexed)
         """
         self.model_name = model_name
         self.tile_size = tile_size
+        self.tile_pad = tile_pad
+        self.gpu_id = gpu_id
         self.model_path = f"/weights/{model_name}.pth"
+
+        # Detect GPU availability
+        use_gpu = torch.cuda.is_available()
+        actual_gpu_id = gpu_id if use_gpu else None
+
+        # Half precision only works on GPU
+        use_half = use_gpu
 
         # Initialize model architecture
         self.model = RRDBNet(
@@ -39,18 +53,18 @@ class ImageUpscaler:
             model_path=self.model_path,
             model=self.model,
             tile=tile_size if tile_size > 0 else 0,
-            tile_pad=10,
+            tile_pad=tile_pad,
             pre_pad=0,
-            half=True,
-            gpu_id=0
+            half=use_half,
+            gpu_id=actual_gpu_id
         )
 
     def upscale_directory(self, input_dir: Path, output_dir: Path) -> list[Path]:
         """
-        Upscale all PNG files in a directory.
+        Upscale all image files in a directory (PNG, JPG, JPEG).
 
         Args:
-            input_dir: Directory containing PNG files
+            input_dir: Directory containing image files
             output_dir: Directory to save upscaled files
 
         Returns:
@@ -58,12 +72,34 @@ class ImageUpscaler:
         """
         output_files = []
 
-        for png_file in input_dir.glob("*.png"):
-            img = cv2.imread(str(png_file), cv2.IMREAD_UNCHANGED)
-            if img is not None:
-                output, _ = self.upsampler.enhance(img, outscale=4)
-                output_file = output_dir / png_file.name
-                cv2.imwrite(str(output_file), output)
-                output_files.append(output_file)
+        # Process PNG, JPG, and JPEG files
+        import itertools
+        image_patterns = ["*.png", "*.jpg", "*.jpeg", "*.PNG", "*.JPG", "*.JPEG"]
+        image_files = itertools.chain.from_iterable(input_dir.glob(pattern) for pattern in image_patterns)
+
+        for png_file in image_files:
+            # Load image with PIL
+            pil_img = Image.open(png_file)
+
+            # Convert to numpy array in BGR format (Real-ESRGAN expects BGR)
+            img = np.array(pil_img)
+            if img.ndim == 2:  # Grayscale
+                img = np.stack([img, img, img], axis=2)
+            elif img.shape[2] == 4:  # RGBA
+                img = img[:, :, :3]  # Drop alpha channel
+
+            # Convert RGB to BGR for Real-ESRGAN
+            img = img[:, :, ::-1]
+
+            # Upscale
+            output, _ = self.upsampler.enhance(img, outscale=4)
+
+            # Convert BGR back to RGB
+            output = output[:, :, ::-1]
+
+            # Save with PIL
+            output_file = output_dir / png_file.name
+            Image.fromarray(output).save(output_file)
+            output_files.append(output_file)
 
         return output_files

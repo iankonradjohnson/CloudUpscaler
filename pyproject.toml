@@ -14,7 +14,12 @@ dependencies = [
     "google-cloud-storage>=2.10.0",
     "Pillow>=10.0.0",
     "python-dotenv>=1.0.0",
+    "mcp>=1.0.0",
 ]
+
+[project.scripts]
+cloud-upscaler = "cloud_upscaler.cli:main"
+cloud-upscaler-mcp = "cloud_upscaler.server:main"
 
 [project.optional-dependencies]
 dev = [

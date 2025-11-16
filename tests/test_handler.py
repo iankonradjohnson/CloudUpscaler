@@ -1,26 +1,28 @@
 """
 Tests for RunPod Serverless handler.
 
-Using strict TDD with Given-When-Then DSL.
+Using strict TDD with Given-When-Then DSL and real objects with DI.
 """
 
 import pytest
 from pathlib import Path
 from unittest.mock import Mock, patch
 import zipfile
-import tempfile
 import sys
 
 
 @pytest.fixture(autouse=True)
 def mock_realesrgan_imports():
     """Automatically mock Real-ESRGAN imports for all tests"""
+    sys.modules['torch'] = Mock()
     sys.modules['basicsr'] = Mock()
     sys.modules['basicsr.archs'] = Mock()
     sys.modules['basicsr.archs.rrdbnet_arch'] = Mock()
     sys.modules['realesrgan'] = Mock()
     yield
     # Cleanup
+    if 'torch' in sys.modules:
+        del sys.modules['torch']
     if 'basicsr' in sys.modules:
         del sys.modules['basicsr']
     if 'basicsr.archs' in sys.modules:
@@ -34,7 +36,48 @@ def mock_realesrgan_imports():
 class TestHandlerValidation:
     """Test handler input validation"""
 
-    def test_rejects_job_without_input_url(self):
+    def test_rejects_invalid_tile_size_below_minimum(self, tmp_path):
+        """Edge case: tile_size < 32 and not 0 should fail per Real-ESRGAN spec"""
+        import sys
+        from pathlib import Path
+
+        # Add docker directory to path
+        docker_dir = Path(__file__).parent.parent / 'docker'
+        sys.path.insert(0, str(docker_dir))
+
+        from handler import Handler
+        from image_downloader import ImageDownloader
+        from zip_extractor import ZipExtractor
+        from image_upscaler import ImageUpscaler
+        from zip_creator import ZipCreator
+        from cloud_storage import CloudStorage
+
+        # Given: handler with dependencies
+        handler = Handler(
+            downloader=ImageDownloader(),
+            extractor=ZipExtractor(),
+            upscaler=ImageUpscaler(),
+            creator=ZipCreator(),
+            storage=CloudStorage()
+        )
+
+        # When: job submitted with invalid tile_size (not 0, but less than 32)
+        job = {
+            'input': {
+                'input_url': 'https://example.com/input.zip',
+                'output_bucket': 'test-bucket',
+                'output_path': 'output.zip',
+                'tile_size': 16  # Invalid: not 0, but < 32
+            }
+        }
+
+        # Then: should reject with clear error message
+        result = handler.handle(job)
+        assert 'error' in result
+        assert 'tile_size' in result['error'].lower()
+        assert '32' in result['error'] or 'minimum' in result['error'].lower()
+
+    def test_rejects_job_without_input_url(self, tmp_path):
         """Edge case: job missing input_url should fail clearly"""
         import sys
         from pathlib import Path
@@ -43,19 +86,34 @@ class TestHandlerValidation:
         docker_dir = Path(__file__).parent.parent / 'docker'
         sys.path.insert(0, str(docker_dir))
 
-        from handler import handler
+        from handler import Handler
+        from image_downloader import ImageDownloader
+        from zip_extractor import ZipExtractor
+        from image_upscaler import ImageUpscaler
+        from zip_creator import ZipCreator
+        from cloud_storage import CloudStorage
 
+        # Given: Real objects with DI
+        handler = Handler(
+            downloader=ImageDownloader(),
+            extractor=ZipExtractor(),
+            upscaler=ImageUpscaler(model_name='net_g_1000000', tile_size=0),
+            creator=ZipCreator(),
+            storage=CloudStorage()
+        )
+
+        # When: Job missing input_url
         job = {
             'input': {
                 'output_bucket': 'test-bucket',
-                'output_path': 'test/output.zip',
-                'model_name': 'net_g_1000000'
+                'output_path': 'test/output.zip'
             }
         }
 
-        result = handler(job)
+        result = handler.handle(job)
 
-        assert result['error'] is not None
+        # Then: Error about missing input_url
+        assert 'error' in result
         assert 'input_url' in result['error'].lower()
 
     def test_rejects_job_without_output_bucket(self):
@@ -63,23 +121,37 @@ class TestHandlerValidation:
         import sys
         from pathlib import Path
 
-        # Add docker directory to path
         docker_dir = Path(__file__).parent.parent / 'docker'
         sys.path.insert(0, str(docker_dir))
 
-        from handler import handler
+        from handler import Handler
+        from image_downloader import ImageDownloader
+        from zip_extractor import ZipExtractor
+        from image_upscaler import ImageUpscaler
+        from zip_creator import ZipCreator
+        from cloud_storage import CloudStorage
 
+        # Given: Real objects with DI
+        handler = Handler(
+            downloader=ImageDownloader(),
+            extractor=ZipExtractor(),
+            upscaler=ImageUpscaler(model_name='net_g_1000000', tile_size=0),
+            creator=ZipCreator(),
+            storage=CloudStorage()
+        )
+
+        # When: Job missing output_bucket
         job = {
             'input': {
                 'input_url': 'https://storage.googleapis.com/bucket/input.zip',
-                'output_path': 'test/output.zip',
-                'model_name': 'net_g_1000000'
+                'output_path': 'test/output.zip'
             }
         }
 
-        result = handler(job)
+        result = handler.handle(job)
 
-        assert result['error'] is not None
+        # Then: Error about missing output_bucket
+        assert 'error' in result
         assert 'output_bucket' in result['error'].lower()
 
     def test_rejects_job_without_output_path(self):
@@ -87,23 +159,37 @@ class TestHandlerValidation:
         import sys
         from pathlib import Path
 
-        # Add docker directory to path
         docker_dir = Path(__file__).parent.parent / 'docker'
         sys.path.insert(0, str(docker_dir))
 
-        from handler import handler
+        from handler import Handler
+        from image_downloader import ImageDownloader
+        from zip_extractor import ZipExtractor
+        from image_upscaler import ImageUpscaler
+        from zip_creator import ZipCreator
+        from cloud_storage import CloudStorage
 
+        # Given: Real objects with DI
+        handler = Handler(
+            downloader=ImageDownloader(),
+            extractor=ZipExtractor(),
+            upscaler=ImageUpscaler(model_name='net_g_1000000', tile_size=0),
+            creator=ZipCreator(),
+            storage=CloudStorage()
+        )
+
+        # When: Job missing output_path
         job = {
             'input': {
                 'input_url': 'https://storage.googleapis.com/bucket/input.zip',
-                'output_bucket': 'test-bucket',
-                'model_name': 'net_g_1000000'
+                'output_bucket': 'test-bucket'
             }
         }
 
-        result = handler(job)
+        result = handler.handle(job)
 
-        assert result['error'] is not None
+        # Then: Error about missing output_path
+        assert 'error' in result
         assert 'output_path' in result['error'].lower()
 
 
@@ -115,45 +201,49 @@ class TestHandlerDownload:
         import sys
         from pathlib import Path
 
-        # Add docker directory to path
         docker_dir = Path(__file__).parent.parent / 'docker'
         sys.path.insert(0, str(docker_dir))
 
-        from handler import handler
+        from handler import Handler
+        from image_downloader import ImageDownloader
+        from zip_extractor import ZipExtractor
+        from image_upscaler import ImageUpscaler
+        from zip_creator import ZipCreator
+        from cloud_storage import CloudStorage
 
-        # Create fake input ZIP
+        # Given: Fake input ZIP
         input_zip = tmp_path / "input.zip"
         with zipfile.ZipFile(input_zip, 'w') as zf:
             zf.writestr("test.png", b"fake png data")
 
-        # Mock requests.get to return our ZIP
+        # Mock only external HTTP call
         mock_response = Mock()
         mock_response.content = input_zip.read_bytes()
         mock_response.raise_for_status = Mock()
 
-        with patch('handler.requests.get', return_value=mock_response) as mock_get:
-            # Mock GCS upload/download to avoid real cloud calls
-            with patch('handler.storage') as mock_storage:
-                mock_client = Mock()
-                mock_bucket = Mock()
-                mock_blob = Mock()
-                mock_blob.generate_signed_url.return_value = "https://fake-signed-url"
-                mock_bucket.blob.return_value = mock_blob
-                mock_client.bucket.return_value = mock_bucket
-                mock_storage.Client.return_value = mock_client
+        with patch('requests.get', return_value=mock_response) as mock_get:
+            with patch('google.cloud.storage.Client'):
+                # Given: Real objects with DI
+                handler = Handler(
+                    downloader=ImageDownloader(),
+                    extractor=ZipExtractor(),
+                    upscaler=ImageUpscaler(model_name='net_g_1000000', tile_size=0),
+                    creator=ZipCreator(),
+                    storage=CloudStorage()
+                )
 
                 job = {
                     'input': {
                         'input_url': 'https://storage.googleapis.com/bucket/input.zip',
                         'output_bucket': 'test-bucket',
-                        'output_path': 'test/output.zip',
-                        'model_name': 'net_g_1000000'
+                        'output_path': 'test/output.zip'
                     }
                 }
 
-                result = handler(job)
+                # When: Handle job
+                result = handler.handle(job)
 
-                # Verify download was called
+                # Then: Download was called
                 mock_get.assert_called_once_with('https://storage.googleapis.com/bucket/input.zip')
 
     def test_extracts_png_files_from_zip(self, tmp_path):
@@ -161,49 +251,60 @@ class TestHandlerDownload:
         import sys
         from pathlib import Path
 
-        # Add docker directory to path
         docker_dir = Path(__file__).parent.parent / 'docker'
         sys.path.insert(0, str(docker_dir))
 
-        from handler import handler
+        from handler import Handler
+        from image_downloader import ImageDownloader
+        from zip_extractor import ZipExtractor
+        from image_upscaler import ImageUpscaler
+        from zip_creator import ZipCreator
+        from cloud_storage import CloudStorage
 
-        # Create fake input ZIP with PNG files
+        # Given: Fake input ZIP with PNG files
         input_zip = tmp_path / "input.zip"
         with zipfile.ZipFile(input_zip, 'w') as zf:
             zf.writestr("image1.png", b"fake png 1")
             zf.writestr("image2.png", b"fake png 2")
 
-        # Mock requests and GCS
         mock_response = Mock()
         mock_response.content = input_zip.read_bytes()
         mock_response.raise_for_status = Mock()
 
-        zipfile_calls = []
+        extraction_happened = []
 
-        # Wrap ZipFile to track calls
-        original_zipfile = zipfile.ZipFile
+        # Track extraction calls
+        original_extract = ZipExtractor.extract
 
-        class TrackingZipFile(original_zipfile):
-            def extractall(self, path):
-                zipfile_calls.append(('extractall', path))
-                return super().extractall(path)
+        def tracking_extract(self, zip_path, extract_dir):
+            extraction_happened.append(True)
+            return original_extract(self, zip_path, extract_dir)
 
-        with patch('handler.requests.get', return_value=mock_response):
-            with patch('handler.storage'):
-                with patch('handler.zipfile.ZipFile', TrackingZipFile):
+        with patch('requests.get', return_value=mock_response):
+            with patch('google.cloud.storage.Client'):
+                with patch.object(ZipExtractor, 'extract', tracking_extract):
+                    # Given: Real objects with DI
+                    handler = Handler(
+                        downloader=ImageDownloader(),
+                        extractor=ZipExtractor(),
+                        upscaler=ImageUpscaler(model_name='net_g_1000000', tile_size=0),
+                        creator=ZipCreator(),
+                        storage=CloudStorage()
+                    )
+
                     job = {
                         'input': {
                             'input_url': 'https://storage.googleapis.com/bucket/input.zip',
                             'output_bucket': 'test-bucket',
-                            'output_path': 'test/output.zip',
-                            'model_name': 'net_g_1000000'
+                            'output_path': 'test/output.zip'
                         }
                     }
 
-                    result = handler(job)
+                    # When: Handle job
+                    result = handler.handle(job)
 
-                    # Verify extraction happened
-                    assert len([c for c in zipfile_calls if c[0] == 'extractall']) > 0
+                    # Then: Extraction happened
+                    assert len(extraction_happened) > 0
 
 
 class TestHandlerUpscaling:
@@ -214,63 +315,63 @@ class TestHandlerUpscaling:
         import sys
         from pathlib import Path
 
-        # Mock Real-ESRGAN imports before loading handler
-        sys.modules['basicsr'] = Mock()
-        sys.modules['basicsr.archs'] = Mock()
-        sys.modules['basicsr.archs.rrdbnet_arch'] = Mock()
-        sys.modules['realesrgan'] = Mock()
-
-        # Add docker directory to path
         docker_dir = Path(__file__).parent.parent / 'docker'
         sys.path.insert(0, str(docker_dir))
 
-        from handler import handler
+        from handler import Handler
+        from image_downloader import ImageDownloader
+        from zip_extractor import ZipExtractor
+        from image_upscaler import ImageUpscaler
+        from zip_creator import ZipCreator
+        from cloud_storage import CloudStorage
 
-        # Create fake input ZIP
+        # Given: Fake input ZIP
         input_zip = tmp_path / "input.zip"
         with zipfile.ZipFile(input_zip, 'w') as zf:
             zf.writestr("image1.png", b"fake png 1")
 
-        # Mock requests
         mock_response = Mock()
         mock_response.content = input_zip.read_bytes()
         mock_response.raise_for_status = Mock()
 
-        # Track upscaler creation
-        upscaler_created = []
+        upscaling_happened = []
 
-        # Mock ImageUpscaler
-        original_init = None
+        # Track upscaling calls
+        original_upscale = ImageUpscaler.upscale_directory
 
-        def mock_upscaler_init(self, model_name="net_g_1000000", tile_size=0):
-            upscaler_created.append({'model_name': model_name, 'tile_size': tile_size})
-            self.model_name = model_name
-            self.tile_size = tile_size
-
-        def mock_upscale_directory(self, input_dir, output_dir):
-            # Create fake output files
+        def tracking_upscale(self, input_dir, output_dir):
+            upscaling_happened.append({'model': self.model_name, 'tile': self.tile_size})
+            # Create fake output
             for png in input_dir.glob("*.png"):
                 (output_dir / png.name).write_bytes(b"upscaled data")
             return list(output_dir.glob("*.png"))
 
-        with patch('handler.requests.get', return_value=mock_response):
-            with patch('handler.storage'):
-                with patch.object(sys.modules['image_upscaler'].ImageUpscaler, '__init__', mock_upscaler_init):
-                    with patch.object(sys.modules['image_upscaler'].ImageUpscaler, 'upscale_directory', mock_upscale_directory):
-                        job = {
-                            'input': {
-                                'input_url': 'https://storage.googleapis.com/bucket/input.zip',
-                                'output_bucket': 'test-bucket',
-                                'output_path': 'test/output.zip',
-                                'model_name': 'net_g_1000000'
-                            }
+        with patch('requests.get', return_value=mock_response):
+            with patch('google.cloud.storage.Client'):
+                with patch.object(ImageUpscaler, 'upscale_directory', tracking_upscale):
+                    # Given: Real objects with DI
+                    handler = Handler(
+                        downloader=ImageDownloader(),
+                        extractor=ZipExtractor(),
+                        upscaler=ImageUpscaler(model_name='net_g_1000000', tile_size=0),
+                        creator=ZipCreator(),
+                        storage=CloudStorage()
+                    )
+
+                    job = {
+                        'input': {
+                            'input_url': 'https://storage.googleapis.com/bucket/input.zip',
+                            'output_bucket': 'test-bucket',
+                            'output_path': 'test/output.zip'
                         }
+                    }
 
-                        result = handler(job)
+                    # When: Handle job
+                    result = handler.handle(job)
 
-                        # Verify upscaler was created
-                        assert len(upscaler_created) > 0
-                        assert upscaler_created[0]['model_name'] == 'net_g_1000000'
+                    # Then: Upscaling happened with correct model
+                    assert len(upscaling_happened) > 0
+                    assert upscaling_happened[0]['model'] == 'net_g_1000000'
 
 
 class TestHandlerOutput:
@@ -281,129 +382,130 @@ class TestHandlerOutput:
         import sys
         from pathlib import Path
 
-        # Mock Real-ESRGAN imports
-        sys.modules['basicsr'] = Mock()
-        sys.modules['basicsr.archs'] = Mock()
-        sys.modules['basicsr.archs.rrdbnet_arch'] = Mock()
-        sys.modules['realesrgan'] = Mock()
-
         docker_dir = Path(__file__).parent.parent / 'docker'
         sys.path.insert(0, str(docker_dir))
 
-        from handler import handler
+        from handler import Handler
+        from image_downloader import ImageDownloader
+        from zip_extractor import ZipExtractor
+        from image_upscaler import ImageUpscaler
+        from zip_creator import ZipCreator
+        from cloud_storage import CloudStorage
 
-        # Create fake input ZIP
+        # Given: Fake input ZIP
         input_zip = tmp_path / "input.zip"
         with zipfile.ZipFile(input_zip, 'w') as zf:
             zf.writestr("image1.png", b"fake png")
 
-        # Mock everything
         mock_response = Mock()
         mock_response.content = input_zip.read_bytes()
         mock_response.raise_for_status = Mock()
 
-        zipfile_calls = []
+        zip_created = []
 
-        # Track ZipFile calls
-        original_zipfile_init = zipfile.ZipFile.__init__
+        # Track ZIP creation
+        original_create = ZipCreator.create
 
-        def tracking_init(self, file, mode='r', *args, **kwargs):
-            zipfile_calls.append(('init', str(file), mode))
-            return original_zipfile_init(self, file, mode, *args, **kwargs)
+        def tracking_create(self, output_files, zip_path):
+            zip_created.append(True)
+            return original_create(self, output_files, zip_path)
 
-        def mock_upscaler_init(self, model_name="net_g_1000000", tile_size=0):
-            self.model_name = model_name
-            self.tile_size = tile_size
-
-        def mock_upscale_directory(self, input_dir, output_dir):
-            # Create fake output files
+        def mock_upscale(self, input_dir, output_dir):
             for png in input_dir.glob("*.png"):
                 (output_dir / png.name).write_bytes(b"upscaled data")
             return list(output_dir.glob("*.png"))
 
-        with patch('handler.requests.get', return_value=mock_response):
-            with patch('handler.storage'):
-                with patch.object(zipfile.ZipFile, '__init__', tracking_init):
-                    with patch.object(sys.modules['image_upscaler'].ImageUpscaler, '__init__', mock_upscaler_init):
-                        with patch.object(sys.modules['image_upscaler'].ImageUpscaler, 'upscale_directory', mock_upscale_directory):
-                            job = {
-                                'input': {
-                                    'input_url': 'https://storage.googleapis.com/bucket/input.zip',
-                                    'output_bucket': 'test-bucket',
-                                    'output_path': 'test/output.zip',
-                                    'model_name': 'net_g_1000000'
-                                }
+        with patch('requests.get', return_value=mock_response):
+            with patch('google.cloud.storage.Client'):
+                with patch.object(ImageUpscaler, 'upscale_directory', mock_upscale):
+                    with patch.object(ZipCreator, 'create', tracking_create):
+                        # Given: Real objects with DI
+                        handler = Handler(
+                            downloader=ImageDownloader(),
+                            extractor=ZipExtractor(),
+                            upscaler=ImageUpscaler(model_name='net_g_1000000', tile_size=0),
+                            creator=ZipCreator(),
+                            storage=CloudStorage()
+                        )
+
+                        job = {
+                            'input': {
+                                'input_url': 'https://storage.googleapis.com/bucket/input.zip',
+                                'output_bucket': 'test-bucket',
+                                'output_path': 'test/output.zip'
                             }
+                        }
 
-                            result = handler(job)
+                        # When: Handle job
+                        result = handler.handle(job)
 
-                            # Verify output ZIP was created (mode='w')
-                            output_zips = [c for c in zipfile_calls if 'output.zip' in c[1] and c[2] == 'w']
-                            assert len(output_zips) > 0
+                        # Then: ZIP was created
+                        assert len(zip_created) > 0
 
     def test_uploads_to_gcs_and_returns_signed_url(self, tmp_path):
         """Handler should upload output ZIP to GCS and return signed URL"""
         import sys
         from pathlib import Path
 
-        # Mock Real-ESRGAN imports
-        sys.modules['basicsr'] = Mock()
-        sys.modules['basicsr.archs'] = Mock()
-        sys.modules['basicsr.archs.rrdbnet_arch'] = Mock()
-        sys.modules['realesrgan'] = Mock()
-
         docker_dir = Path(__file__).parent.parent / 'docker'
         sys.path.insert(0, str(docker_dir))
 
-        from handler import handler
+        from handler import Handler
+        from image_downloader import ImageDownloader
+        from zip_extractor import ZipExtractor
+        from image_upscaler import ImageUpscaler
+        from zip_creator import ZipCreator
+        from cloud_storage import CloudStorage
 
-        # Create fake input ZIP
+        # Given: Fake input ZIP
         input_zip = tmp_path / "input.zip"
         with zipfile.ZipFile(input_zip, 'w') as zf:
             zf.writestr("image1.png", b"fake png")
 
-        # Mock requests
         mock_response = Mock()
         mock_response.content = input_zip.read_bytes()
         mock_response.raise_for_status = Mock()
 
-        # Mock GCS
+        # Mock GCS client
         mock_blob = Mock()
         mock_blob.generate_signed_url = Mock(return_value="https://signed-url.gcs/output.zip")
+        mock_blob.upload_from_filename = Mock()
         mock_bucket = Mock()
         mock_bucket.blob = Mock(return_value=mock_blob)
         mock_client = Mock()
         mock_client.bucket = Mock(return_value=mock_bucket)
 
-        def mock_upscaler_init(self, model_name="net_g_1000000", tile_size=0):
-            self.model_name = model_name
-            self.tile_size = tile_size
-
-        def mock_upscale_directory(self, input_dir, output_dir):
-            # Create fake output files
+        def mock_upscale(self, input_dir, output_dir):
             for png in input_dir.glob("*.png"):
                 (output_dir / png.name).write_bytes(b"upscaled data")
             return list(output_dir.glob("*.png"))
 
-        with patch('handler.requests.get', return_value=mock_response):
-            with patch('handler.storage.Client', return_value=mock_client):
-                with patch.object(sys.modules['image_upscaler'].ImageUpscaler, '__init__', mock_upscaler_init):
-                    with patch.object(sys.modules['image_upscaler'].ImageUpscaler, 'upscale_directory', mock_upscale_directory):
-                        job = {
-                            'input': {
-                                'input_url': 'https://storage.googleapis.com/bucket/input.zip',
-                                'output_bucket': 'test-bucket',
-                                'output_path': 'test/output.zip',
-                                'model_name': 'net_g_1000000'
-                            }
+        with patch('requests.get', return_value=mock_response):
+            with patch('google.cloud.storage.Client', return_value=mock_client):
+                with patch.object(ImageUpscaler, 'upscale_directory', mock_upscale):
+                    # Given: Real objects with DI
+                    handler = Handler(
+                        downloader=ImageDownloader(),
+                        extractor=ZipExtractor(),
+                        upscaler=ImageUpscaler(model_name='net_g_1000000', tile_size=0),
+                        creator=ZipCreator(),
+                        storage=CloudStorage()
+                    )
+
+                    job = {
+                        'input': {
+                            'input_url': 'https://storage.googleapis.com/bucket/input.zip',
+                            'output_bucket': 'test-bucket',
+                            'output_path': 'test/output.zip'
                         }
+                    }
 
-                        result = handler(job)
+                    # When: Handle job
+                    result = handler.handle(job)
 
-                        # Verify GCS upload happened
-                        mock_bucket.blob.assert_called()
-                        mock_blob.upload_from_filename.assert_called()
-                        # Verify signed URL is returned
-                        assert 'output' in result
-                        assert 'output_url' in result['output']
-                        assert result['output']['output_url'] == "https://signed-url.gcs/output.zip"
+                    # Then: GCS upload happened and signed URL returned
+                    mock_bucket.blob.assert_called()
+                    mock_blob.upload_from_filename.assert_called()
+                    assert 'output' in result
+                    assert 'output_url' in result['output']
+                    assert result['output']['output_url'] == "https://signed-url.gcs/output.zip"

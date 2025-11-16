@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "cloud-upscaler": {
+      "command": "/Users/iankonradjohnson/base/abacus/CloudUpscaler/venv/bin/cloud-upscaler-mcp",
+      "env": {
+        "RUNPOD_API_KEY": "${RUNPOD_API_KEY}",
+        "RUNPOD_ENDPOINT_ID": "${RUNPOD_ENDPOINT_ID}",
+        "GCS_BUCKET": "${GCS_BUCKET}",
+        "GCS_PROJECT_ID": "${GCS_PROJECT_ID}",
+        "GOOGLE_APPLICATION_CREDENTIALS": "${GOOGLE_APPLICATION_CREDENTIALS}",
+        "UPSCALER_MODE": "cloud"
+      }
+    }
+  }
+}
