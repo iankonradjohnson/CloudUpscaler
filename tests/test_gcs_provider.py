@@ -57,17 +57,19 @@ def test_downloads_file_from_signed_url():
         # Mock requests.get
         with patch('cloud_upscaler.providers.gcs.requests.get') as mock_get:
             mock_response = Mock()
-            mock_response.content = b"fake file content"
+            mock_response.headers = {'content-length': '17'}
+            mock_response.iter_content = Mock(return_value=[b"fake file content"])
             mock_get.return_value = mock_response
 
-            # Mock Path.write_bytes
-            with patch('cloud_upscaler.providers.gcs.Path') as mock_path_class:
-                mock_path = Mock()
-                mock_path_class.return_value = mock_path
+            # Mock open() for streaming writes
+            with patch('builtins.open', create=True) as mock_open:
+                mock_file = Mock()
+                mock_open.return_value.__enter__.return_value = mock_file
 
                 # When
                 provider.download("https://storage.googleapis.com/signed-url", "/tmp/output.zip")
 
                 # Then
-                mock_get.assert_called_once_with("https://storage.googleapis.com/signed-url")
-                mock_path.write_bytes.assert_called_once_with(b"fake file content")
+                mock_get.assert_called_once_with("https://storage.googleapis.com/signed-url", stream=True)
+                mock_open.assert_called_once_with("/tmp/output.zip", 'wb')
+                mock_file.write.assert_called_once_with(b"fake file content")

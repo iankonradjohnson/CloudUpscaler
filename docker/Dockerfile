@@ -63,8 +63,10 @@ COPY handler.py /app/
 COPY image_downloader.py /app/
 COPY zip_extractor.py /app/
 COPY image_upscaler.py /app/
+COPY multi_gpu_upscaler.py /app/
 COPY zip_creator.py /app/
 COPY cloud_storage.py /app/
+COPY parallel_image_downsampler.py /app/
 
 # Set Google Cloud credentials path (will be set at runtime via env var)
 ENV GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcs_credentials.json

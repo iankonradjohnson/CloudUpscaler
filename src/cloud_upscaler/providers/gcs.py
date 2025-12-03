@@ -30,6 +30,23 @@ class GoogleCloudStorageProvider:
         return signed_url
 
     def download(self, remote_url: str, local_path: str):
-        """Download file from signed URL"""
-        response = requests.get(remote_url)
-        Path(local_path).write_bytes(response.content)
+        """Download file from signed URL with streaming"""
+        print(f"Downloading from GCS...", flush=True)
+        response = requests.get(remote_url, stream=True)
+        response.raise_for_status()
+
+        total_size = int(response.headers.get('content-length', 0))
+        downloaded = 0
+
+        with open(local_path, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    # Print progress every 50MB
+                    if downloaded % (50 * 1024 * 1024) < 8192:
+                        mb_downloaded = downloaded / (1024 * 1024)
+                        mb_total = total_size / (1024 * 1024)
+                        print(f"  Downloaded: {mb_downloaded:.1f}MB / {mb_total:.1f}MB", flush=True)
+
+        print(f"Download complete: {local_path}", flush=True)

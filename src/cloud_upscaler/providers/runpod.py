@@ -15,21 +15,37 @@ class RunPodComputeProvider:
         self.output_path = output_path
         self.base_url = f"https://api.runpod.ai/v2/{endpoint_id}"
 
-    def submit_job(self, input_url: str, model_name: str) -> str:
+    def submit_job(self, input_url: str, model_name: str, realesrgan_params: dict = None) -> str:
         """Submit upscaling job to RunPod"""
+        # Default params if not provided
+        if realesrgan_params is None:
+            realesrgan_params = {
+                'tile_size': 0,
+                'scale': 4,
+                'face_enhance': False,
+                'fp32': False,
+                'gpu_id': '0'
+            }
+
+        # Build job input with Real-ESRGAN parameters
+        job_input = {
+            "input_url": input_url,
+            "output_bucket": self.output_bucket,
+            "output_path": self.output_path,
+            "model_name": model_name,
+            "tile_size": realesrgan_params.get('tile_size', 0),
+            "tile_pad": realesrgan_params.get('tile_pad', 10),
+            "scale": realesrgan_params.get('scale', 4),
+            "face_enhance": realesrgan_params.get('face_enhance', False),
+            "fp32": realesrgan_params.get('fp32', False),
+            "gpu_id": realesrgan_params.get('gpu_id', '0'),
+            "downsample_scale": realesrgan_params.get('downsample_scale', 1.0)
+        }
+
         response = requests.post(
             f"{self.base_url}/run",
             headers={"Authorization": f"Bearer {self.api_key}"},
-            json={
-                "input": {
-                    "input_url": input_url,
-                    "output_bucket": self.output_bucket,
-                    "output_path": self.output_path,
-                    "model_name": model_name,
-                    "tile_size": 0,
-                    "gpu_count": 1
-                }
-            }
+            json={"input": job_input}
         )
         result = response.json()
         return result["id"]

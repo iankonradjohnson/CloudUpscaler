@@ -90,12 +90,13 @@ class FakeComputeProvider:
         self.output_url = "fake://storage/output.zip"
         self.status_checks = []  # Track how many times status was checked
 
-    def submit_job(self, input_url, model_name):
+    def submit_job(self, input_url, model_name, realesrgan_params=None):
         job_id = f"fake-job-{len(self.submitted_jobs)}"
         self.submitted_jobs.append({
             "job_id": job_id,
             "input_url": input_url,
-            "model_name": model_name
+            "model_name": model_name,
+            "realesrgan_params": realesrgan_params
         })
         return job_id
 
@@ -207,7 +208,7 @@ class TestUpscaleImages:
 
         empty_dir = given_empty_directory(tmp_path)
 
-        with pytest.raises(ValueError, match="No PNG files found"):
+        with pytest.raises(ValueError, match="No image files found"):
             upscale_images(input_dir=empty_dir, output_dir=Path("/tmp/output"))
 
     def test_rejects_too_many_files(self, tmp_path):
@@ -216,7 +217,7 @@ class TestUpscaleImages:
 
         dir_with_many = given_directory_with_too_many_images(tmp_path)
 
-        with pytest.raises(ValueError, match="Too many PNG files"):
+        with pytest.raises(ValueError, match="Too many image files"):
             upscale_images(input_dir=dir_with_many, output_dir=Path("/tmp/output"))
 
     def test_rejects_single_file(self, tmp_path):
@@ -225,7 +226,7 @@ class TestUpscaleImages:
 
         dir_with_one = given_directory_with_single_image(tmp_path)
 
-        with pytest.raises(ValueError, match="At least 2 PNG files required"):
+        with pytest.raises(ValueError, match="At least 2 image files required"):
             upscale_images(input_dir=dir_with_one, output_dir=Path("/tmp/output"))
 
     def test_upscales_two_files_successfully(self, tmp_path):

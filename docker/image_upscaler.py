@@ -14,7 +14,7 @@ from realesrgan import RealESRGANer
 class ImageUpscaler:
     """Upscales images using Real-ESRGAN."""
 
-    def __init__(self, model_name: str = "net_g_1000000", tile_size: int = 0, tile_pad: int = 10, gpu_id: int = 0):
+    def __init__(self, model_name: str = "net_g_1000000", tile_size: int = 0, tile_pad: int = 10, gpu_id: int = 0, scale: int = 4, fp32: bool = False):
         """
         Initialize upscaler.
 
@@ -23,19 +23,23 @@ class ImageUpscaler:
             tile_size: Tile size for processing (0 = no tiling)
             tile_pad: Padding for tiles (default 10, use 0 for no padding)
             gpu_id: GPU ID to use (0-indexed)
+            scale: Upscaling factor (default: 4)
+            fp32: Use FP32 precision instead of FP16 (default: False)
         """
         self.model_name = model_name
         self.tile_size = tile_size
         self.tile_pad = tile_pad
         self.gpu_id = gpu_id
+        self.scale = scale
         self.model_path = f"/weights/{model_name}.pth"
 
         # Detect GPU availability
         use_gpu = torch.cuda.is_available()
         actual_gpu_id = gpu_id if use_gpu else None
 
-        # Half precision only works on GPU
-        use_half = use_gpu
+        # Half precision: use FP16 unless fp32 is True
+        # Note: FP16 can cause CUBLAS errors on some GPUs, so fp32=True is safer
+        use_half = not fp32
 
         # Initialize model architecture
         self.model = RRDBNet(
@@ -44,12 +48,12 @@ class ImageUpscaler:
             num_feat=64,
             num_block=23,
             num_grow_ch=32,
-            scale=4
+            scale=scale
         )
 
         # Create upsampler
         self.upsampler = RealESRGANer(
-            scale=4,
+            scale=scale,
             model_path=self.model_path,
             model=self.model,
             tile=tile_size if tile_size > 0 else 0,
@@ -92,7 +96,7 @@ class ImageUpscaler:
             img = img[:, :, ::-1]
 
             # Upscale
-            output, _ = self.upsampler.enhance(img, outscale=4)
+            output, _ = self.upsampler.enhance(img, outscale=self.scale)
 
             # Convert BGR back to RGB
             output = output[:, :, ::-1]

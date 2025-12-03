@@ -12,7 +12,7 @@ from image_upscaler import ImageUpscaler
 class MultiGPUUpscaler:
     """Process images in parallel across multiple GPUs."""
 
-    def __init__(self, model_name: str, tile_size: int, tile_pad: int, gpu_count: int):
+    def __init__(self, model_name: str, tile_size: int, tile_pad: int, gpu_count: int, scale: int = 4, fp32: bool = False):
         """
         Initialize multi-GPU upscaler.
 
@@ -21,10 +21,13 @@ class MultiGPUUpscaler:
             tile_size: Tile size for processing
             tile_pad: Padding for tiles
             gpu_count: Number of GPUs to use
+            scale: Upscaling factor (default: 4)
+            fp32: Use FP32 precision instead of FP16 (default: False)
         """
         self.model_name = model_name
         self.tile_size = tile_size
         self.tile_pad = tile_pad
+        self.scale = scale
 
         # Detect available GPUs
         if torch.cuda.is_available():
@@ -42,7 +45,9 @@ class MultiGPUUpscaler:
                 model_name=model_name,
                 tile_size=tile_size,
                 tile_pad=tile_pad,
-                gpu_id=gpu_id
+                gpu_id=gpu_id,
+                scale=scale,
+                fp32=fp32
             )
             self.upscalers.append((gpu_id, upscaler))
 
@@ -150,7 +155,7 @@ class MultiGPUUpscaler:
         img = img[:, :, ::-1]
 
         # Upscale
-        output, _ = upscaler.upsampler.enhance(img, outscale=4)
+        output, _ = upscaler.upsampler.enhance(img, outscale=self.scale)
 
         # Convert BGR back to RGB
         output = output[:, :, ::-1]

@@ -51,6 +51,7 @@ class TestHandlerValidation:
         from image_upscaler import ImageUpscaler
         from zip_creator import ZipCreator
         from cloud_storage import CloudStorage
+        from parallel_image_downsampler import ParallelImageDownsampler
 
         # Given: handler with dependencies
         handler = Handler(
@@ -58,7 +59,8 @@ class TestHandlerValidation:
             extractor=ZipExtractor(),
             upscaler=ImageUpscaler(),
             creator=ZipCreator(),
-            storage=CloudStorage()
+            storage=CloudStorage(),
+            downsampler=ParallelImageDownsampler()
         )
 
         # When: job submitted with invalid tile_size (not 0, but less than 32)
@@ -92,6 +94,7 @@ class TestHandlerValidation:
         from image_upscaler import ImageUpscaler
         from zip_creator import ZipCreator
         from cloud_storage import CloudStorage
+        from parallel_image_downsampler import ParallelImageDownsampler
 
         # Given: handler with dependencies
         handler = Handler(
@@ -99,7 +102,8 @@ class TestHandlerValidation:
             extractor=ZipExtractor(),
             upscaler=ImageUpscaler(),
             creator=ZipCreator(),
-            storage=CloudStorage()
+            storage=CloudStorage(),
+            downsampler=ParallelImageDownsampler()
         )
 
         # When: job submitted with tile_size=0 (explicit no tiling)
@@ -133,6 +137,7 @@ class TestHandlerValidation:
         from image_upscaler import ImageUpscaler
         from zip_creator import ZipCreator
         from cloud_storage import CloudStorage
+        from parallel_image_downsampler import ParallelImageDownsampler
 
         # Given: handler with dependencies
         handler = Handler(
@@ -140,7 +145,8 @@ class TestHandlerValidation:
             extractor=ZipExtractor(),
             upscaler=ImageUpscaler(),
             creator=ZipCreator(),
-            storage=CloudStorage()
+            storage=CloudStorage(),
+            downsampler=ParallelImageDownsampler()
         )
 
         # When: job submitted with tile_size=32 (minimum valid tiling)
@@ -174,6 +180,7 @@ class TestHandlerValidation:
         from image_upscaler import ImageUpscaler
         from zip_creator import ZipCreator
         from cloud_storage import CloudStorage
+        from parallel_image_downsampler import ParallelImageDownsampler
 
         # Given: Real objects with DI
         handler = Handler(
@@ -181,7 +188,8 @@ class TestHandlerValidation:
             extractor=ZipExtractor(),
             upscaler=ImageUpscaler(model_name='net_g_1000000', tile_size=0),
             creator=ZipCreator(),
-            storage=CloudStorage()
+            storage=CloudStorage(),
+            downsampler=ParallelImageDownsampler()
         )
 
         # When: Job missing input_url
@@ -212,6 +220,7 @@ class TestHandlerValidation:
         from image_upscaler import ImageUpscaler
         from zip_creator import ZipCreator
         from cloud_storage import CloudStorage
+        from parallel_image_downsampler import ParallelImageDownsampler
 
         # Given: Real objects with DI
         handler = Handler(
@@ -219,7 +228,8 @@ class TestHandlerValidation:
             extractor=ZipExtractor(),
             upscaler=ImageUpscaler(model_name='net_g_1000000', tile_size=0),
             creator=ZipCreator(),
-            storage=CloudStorage()
+            storage=CloudStorage(),
+            downsampler=ParallelImageDownsampler()
         )
 
         # When: Job missing output_bucket
@@ -250,6 +260,7 @@ class TestHandlerValidation:
         from image_upscaler import ImageUpscaler
         from zip_creator import ZipCreator
         from cloud_storage import CloudStorage
+        from parallel_image_downsampler import ParallelImageDownsampler
 
         # Given: Real objects with DI
         handler = Handler(
@@ -257,7 +268,8 @@ class TestHandlerValidation:
             extractor=ZipExtractor(),
             upscaler=ImageUpscaler(model_name='net_g_1000000', tile_size=0),
             creator=ZipCreator(),
-            storage=CloudStorage()
+            storage=CloudStorage(),
+            downsampler=ParallelImageDownsampler()
         )
 
         # When: Job missing output_path
@@ -292,6 +304,7 @@ class TestHandlerDownload:
         from image_upscaler import ImageUpscaler
         from zip_creator import ZipCreator
         from cloud_storage import CloudStorage
+        from parallel_image_downsampler import ParallelImageDownsampler
 
         # Given: Fake input ZIP
         input_zip = tmp_path / "input.zip"
@@ -311,7 +324,8 @@ class TestHandlerDownload:
                     extractor=ZipExtractor(),
                     upscaler=ImageUpscaler(model_name='net_g_1000000', tile_size=0),
                     creator=ZipCreator(),
-                    storage=CloudStorage()
+                    storage=CloudStorage(),
+            downsampler=ParallelImageDownsampler()
                 )
 
                 job = {
@@ -342,6 +356,7 @@ class TestHandlerDownload:
         from image_upscaler import ImageUpscaler
         from zip_creator import ZipCreator
         from cloud_storage import CloudStorage
+        from parallel_image_downsampler import ParallelImageDownsampler
 
         # Given: Fake input ZIP with PNG files
         input_zip = tmp_path / "input.zip"
@@ -371,7 +386,8 @@ class TestHandlerDownload:
                         extractor=ZipExtractor(),
                         upscaler=ImageUpscaler(model_name='net_g_1000000', tile_size=0),
                         creator=ZipCreator(),
-                        storage=CloudStorage()
+                        storage=CloudStorage(),
+            downsampler=ParallelImageDownsampler()
                     )
 
                     job = {
@@ -406,6 +422,7 @@ class TestHandlerUpscaling:
         from image_upscaler import ImageUpscaler
         from zip_creator import ZipCreator
         from cloud_storage import CloudStorage
+        from parallel_image_downsampler import ParallelImageDownsampler
 
         # Given: Fake input ZIP
         input_zip = tmp_path / "input.zip"
@@ -437,7 +454,8 @@ class TestHandlerUpscaling:
                         extractor=ZipExtractor(),
                         upscaler=ImageUpscaler(model_name='net_g_1000000', tile_size=0),
                         creator=ZipCreator(),
-                        storage=CloudStorage()
+                        storage=CloudStorage(),
+            downsampler=ParallelImageDownsampler()
                     )
 
                     job = {
@@ -473,6 +491,7 @@ class TestHandlerOutput:
         from image_upscaler import ImageUpscaler
         from zip_creator import ZipCreator
         from cloud_storage import CloudStorage
+        from parallel_image_downsampler import ParallelImageDownsampler
 
         # Given: Fake input ZIP
         input_zip = tmp_path / "input.zip"
@@ -507,7 +526,8 @@ class TestHandlerOutput:
                             extractor=ZipExtractor(),
                             upscaler=ImageUpscaler(model_name='net_g_1000000', tile_size=0),
                             creator=ZipCreator(),
-                            storage=CloudStorage()
+                            storage=CloudStorage(),
+            downsampler=ParallelImageDownsampler()
                         )
 
                         job = {
@@ -538,6 +558,7 @@ class TestHandlerOutput:
         from image_upscaler import ImageUpscaler
         from zip_creator import ZipCreator
         from cloud_storage import CloudStorage
+        from parallel_image_downsampler import ParallelImageDownsampler
 
         # Given: Fake input ZIP
         input_zip = tmp_path / "input.zip"
@@ -571,7 +592,8 @@ class TestHandlerOutput:
                         extractor=ZipExtractor(),
                         upscaler=ImageUpscaler(model_name='net_g_1000000', tile_size=0),
                         creator=ZipCreator(),
-                        storage=CloudStorage()
+                        storage=CloudStorage(),
+            downsampler=ParallelImageDownsampler()
                     )
 
                     job = {
@@ -591,3 +613,353 @@ class TestHandlerOutput:
                     assert 'output' in result
                     assert 'output_url' in result['output']
                     assert result['output']['output_url'] == "https://signed-url.gcs/output.zip"
+
+
+class TestHandlerDownsampling:
+    """Test handler downsampling functionality"""
+
+    def test_downsamples_images_to_correct_dimensions(self, tmp_path):
+        """Handler should downsample upscaled images when downsample_scale < 1.0"""
+        import sys
+        from pathlib import Path
+        from PIL import Image
+        import shutil
+
+        docker_dir = Path(__file__).parent.parent / 'docker'
+        sys.path.insert(0, str(docker_dir))
+
+        from handler import Handler
+        from image_downloader import ImageDownloader
+        from zip_extractor import ZipExtractor
+        from image_upscaler import ImageUpscaler
+        from zip_creator import ZipCreator
+        from cloud_storage import CloudStorage
+        from parallel_image_downsampler import ParallelImageDownsampler
+
+        # Given: Fake input ZIP with small test image
+        input_zip = tmp_path / "input.zip"
+        test_img = Image.new('RGB', (10, 10), color='red')
+        test_img_path = tmp_path / "test.png"
+        test_img.save(test_img_path)
+
+        with zipfile.ZipFile(input_zip, 'w') as zf:
+            zf.write(test_img_path, "test.png")
+
+        mock_response = Mock()
+        mock_response.content = input_zip.read_bytes()
+        mock_response.raise_for_status = Mock()
+
+        # Capture uploaded ZIP by copying it before it's deleted
+        captured_zip_path = tmp_path / "captured_output.zip"
+
+        def capture_upload(zip_path):
+            shutil.copy(zip_path, captured_zip_path)
+
+        # Mock GCS client
+        mock_blob = Mock()
+        mock_blob.generate_signed_url = Mock(return_value="https://signed-url.gcs/output.zip")
+        mock_blob.upload_from_filename = Mock(side_effect=capture_upload)
+        mock_bucket = Mock()
+        mock_bucket.blob = Mock(return_value=mock_blob)
+        mock_client = Mock()
+        mock_client.bucket = Mock(return_value=mock_bucket)
+
+        # Fake upscaler creates 100x100 images
+        def fake_upscale(self, input_dir, output_dir):
+            for img_file in input_dir.glob("*.png"):
+                upscaled_img = Image.new('RGB', (100, 100), color='blue')
+                upscaled_img.save(output_dir / img_file.name)
+            return list(output_dir.glob("*.png"))
+
+        with patch('requests.get', return_value=mock_response):
+            with patch('google.cloud.storage.Client', return_value=mock_client):
+                with patch.object(ImageUpscaler, 'upscale_directory', fake_upscale):
+                    # Given: Real handler with real downsampler
+                    handler = Handler(
+                        downloader=ImageDownloader(),
+                        extractor=ZipExtractor(),
+                        upscaler=ImageUpscaler(model_name='net_g_1000000', tile_size=0),
+                        creator=ZipCreator(),
+                        storage=CloudStorage(),
+            downsampler=ParallelImageDownsampler()
+                    )
+
+                    job = {
+                        'input': {
+                            'input_url': 'https://storage.googleapis.com/bucket/input.zip',
+                            'output_bucket': 'test-bucket',
+                            'output_path': 'test/output.zip',
+                            'downsample_scale': 0.9  # Downsample to 90%
+                        }
+                    }
+
+                    # When: Handle job
+                    result = handler.handle(job)
+
+                    # Then: Output images should be 90x90 (100 * 0.9)
+                    # Extract the captured ZIP and verify dimensions
+                    extract_dir = tmp_path / "verify_output"
+                    extract_dir.mkdir()
+                    with zipfile.ZipFile(captured_zip_path, 'r') as zf:
+                        zf.extractall(extract_dir)
+
+                    output_image = Image.open(extract_dir / "test.png")
+                    assert output_image.size == (90, 90), f"Expected (90, 90), got {output_image.size}"
+
+    def test_no_downsampling_when_scale_is_one(self, tmp_path):
+        """Handler should not downsample when downsample_scale = 1.0"""
+        import sys
+        from pathlib import Path
+        from PIL import Image
+        import shutil
+
+        docker_dir = Path(__file__).parent.parent / 'docker'
+        sys.path.insert(0, str(docker_dir))
+
+        from handler import Handler
+        from image_downloader import ImageDownloader
+        from zip_extractor import ZipExtractor
+        from image_upscaler import ImageUpscaler
+        from zip_creator import ZipCreator
+        from cloud_storage import CloudStorage
+        from parallel_image_downsampler import ParallelImageDownsampler
+
+        # Given: Fake input ZIP with small test image
+        input_zip = tmp_path / "input.zip"
+        test_img = Image.new('RGB', (10, 10), color='red')
+        test_img_path = tmp_path / "test.png"
+        test_img.save(test_img_path)
+
+        with zipfile.ZipFile(input_zip, 'w') as zf:
+            zf.write(test_img_path, "test.png")
+
+        mock_response = Mock()
+        mock_response.content = input_zip.read_bytes()
+        mock_response.raise_for_status = Mock()
+
+        # Capture uploaded ZIP by copying it before it's deleted
+        captured_zip_path = tmp_path / "captured_output.zip"
+
+        def capture_upload(zip_path):
+            shutil.copy(zip_path, captured_zip_path)
+
+        # Mock GCS client
+        mock_blob = Mock()
+        mock_blob.generate_signed_url = Mock(return_value="https://signed-url.gcs/output.zip")
+        mock_blob.upload_from_filename = Mock(side_effect=capture_upload)
+        mock_bucket = Mock()
+        mock_bucket.blob = Mock(return_value=mock_blob)
+        mock_client = Mock()
+        mock_client.bucket = Mock(return_value=mock_bucket)
+
+        # Fake upscaler creates 100x100 images
+        def fake_upscale(self, input_dir, output_dir):
+            for img_file in input_dir.glob("*.png"):
+                upscaled_img = Image.new('RGB', (100, 100), color='blue')
+                upscaled_img.save(output_dir / img_file.name)
+            return list(output_dir.glob("*.png"))
+
+        with patch('requests.get', return_value=mock_response):
+            with patch('google.cloud.storage.Client', return_value=mock_client):
+                with patch.object(ImageUpscaler, 'upscale_directory', fake_upscale):
+                    # Given: Real handler
+                    handler = Handler(
+                        downloader=ImageDownloader(),
+                        extractor=ZipExtractor(),
+                        upscaler=ImageUpscaler(model_name='net_g_1000000', tile_size=0),
+                        creator=ZipCreator(),
+                        storage=CloudStorage(),
+            downsampler=ParallelImageDownsampler()
+                    )
+
+                    job = {
+                        'input': {
+                            'input_url': 'https://storage.googleapis.com/bucket/input.zip',
+                            'output_bucket': 'test-bucket',
+                            'output_path': 'test/output.zip',
+                            'downsample_scale': 1.0  # No downsampling
+                        }
+                    }
+
+                    # When: Handle job
+                    result = handler.handle(job)
+
+                    # Then: Output images should remain 100x100
+                    extract_dir = tmp_path / "verify_output"
+                    extract_dir.mkdir()
+                    with zipfile.ZipFile(captured_zip_path, 'r') as zf:
+                        zf.extractall(extract_dir)
+
+                    output_image = Image.open(extract_dir / "test.png")
+                    assert output_image.size == (100, 100), f"Expected (100, 100), got {output_image.size}"
+
+    def test_backward_compatible_when_parameter_omitted(self, tmp_path):
+        """Handler should work without downsample_scale parameter (default to 1.0)"""
+        import sys
+        from pathlib import Path
+        from PIL import Image
+        import shutil
+
+        docker_dir = Path(__file__).parent.parent / 'docker'
+        sys.path.insert(0, str(docker_dir))
+
+        from handler import Handler
+        from image_downloader import ImageDownloader
+        from zip_extractor import ZipExtractor
+        from image_upscaler import ImageUpscaler
+        from zip_creator import ZipCreator
+        from cloud_storage import CloudStorage
+        from parallel_image_downsampler import ParallelImageDownsampler
+
+        # Given: Fake input ZIP with small test image
+        input_zip = tmp_path / "input.zip"
+        test_img = Image.new('RGB', (10, 10), color='red')
+        test_img_path = tmp_path / "test.png"
+        test_img.save(test_img_path)
+
+        with zipfile.ZipFile(input_zip, 'w') as zf:
+            zf.write(test_img_path, "test.png")
+
+        mock_response = Mock()
+        mock_response.content = input_zip.read_bytes()
+        mock_response.raise_for_status = Mock()
+
+        # Capture uploaded ZIP by copying it before it's deleted
+        captured_zip_path = tmp_path / "captured_output.zip"
+
+        def capture_upload(zip_path):
+            shutil.copy(zip_path, captured_zip_path)
+
+        # Mock GCS client
+        mock_blob = Mock()
+        mock_blob.generate_signed_url = Mock(return_value="https://signed-url.gcs/output.zip")
+        mock_blob.upload_from_filename = Mock(side_effect=capture_upload)
+        mock_bucket = Mock()
+        mock_bucket.blob = Mock(return_value=mock_blob)
+        mock_client = Mock()
+        mock_client.bucket = Mock(return_value=mock_bucket)
+
+        # Fake upscaler creates 100x100 images
+        def fake_upscale(self, input_dir, output_dir):
+            for img_file in input_dir.glob("*.png"):
+                upscaled_img = Image.new('RGB', (100, 100), color='blue')
+                upscaled_img.save(output_dir / img_file.name)
+            return list(output_dir.glob("*.png"))
+
+        with patch('requests.get', return_value=mock_response):
+            with patch('google.cloud.storage.Client', return_value=mock_client):
+                with patch.object(ImageUpscaler, 'upscale_directory', fake_upscale):
+                    # Given: Real handler
+                    handler = Handler(
+                        downloader=ImageDownloader(),
+                        extractor=ZipExtractor(),
+                        upscaler=ImageUpscaler(model_name='net_g_1000000', tile_size=0),
+                        creator=ZipCreator(),
+                        storage=CloudStorage(),
+            downsampler=ParallelImageDownsampler()
+                    )
+
+                    job = {
+                        'input': {
+                            'input_url': 'https://storage.googleapis.com/bucket/input.zip',
+                            'output_bucket': 'test-bucket',
+                            'output_path': 'test/output.zip'
+                            # No downsample_scale parameter
+                        }
+                    }
+
+                    # When: Handle job
+                    result = handler.handle(job)
+
+                    # Then: Output images should remain 100x100 (default behavior)
+                    extract_dir = tmp_path / "verify_output"
+                    extract_dir.mkdir()
+                    with zipfile.ZipFile(captured_zip_path, 'r') as zf:
+                        zf.extractall(extract_dir)
+
+                    output_image = Image.open(extract_dir / "test.png")
+                    assert output_image.size == (100, 100), f"Expected (100, 100), got {output_image.size}"
+
+    def test_rejects_scale_below_minimum(self, tmp_path):
+        """Handler should reject downsample_scale < 0.1"""
+        import sys
+        from pathlib import Path
+
+        docker_dir = Path(__file__).parent.parent / 'docker'
+        sys.path.insert(0, str(docker_dir))
+
+        from handler import Handler
+        from image_downloader import ImageDownloader
+        from zip_extractor import ZipExtractor
+        from image_upscaler import ImageUpscaler
+        from zip_creator import ZipCreator
+        from cloud_storage import CloudStorage
+        from parallel_image_downsampler import ParallelImageDownsampler
+
+        # Given: Real handler
+        handler = Handler(
+            downloader=ImageDownloader(),
+            extractor=ZipExtractor(),
+            upscaler=ImageUpscaler(model_name='net_g_1000000', tile_size=0),
+            creator=ZipCreator(),
+            storage=CloudStorage(),
+            downsampler=ParallelImageDownsampler()
+        )
+
+        job = {
+            'input': {
+                'input_url': 'https://storage.googleapis.com/bucket/input.zip',
+                'output_bucket': 'test-bucket',
+                'output_path': 'test/output.zip',
+                'downsample_scale': 0.05  # Invalid: too small
+            }
+        }
+
+        # When: Handle job
+        result = handler.handle(job)
+
+        # Then: Should reject with error
+        assert 'error' in result
+        assert 'downsample_scale' in result['error'].lower()
+
+    def test_rejects_scale_above_maximum(self, tmp_path):
+        """Handler should reject downsample_scale > 1.0"""
+        import sys
+        from pathlib import Path
+
+        docker_dir = Path(__file__).parent.parent / 'docker'
+        sys.path.insert(0, str(docker_dir))
+
+        from handler import Handler
+        from image_downloader import ImageDownloader
+        from zip_extractor import ZipExtractor
+        from image_upscaler import ImageUpscaler
+        from zip_creator import ZipCreator
+        from cloud_storage import CloudStorage
+        from parallel_image_downsampler import ParallelImageDownsampler
+
+        # Given: Real handler
+        handler = Handler(
+            downloader=ImageDownloader(),
+            extractor=ZipExtractor(),
+            upscaler=ImageUpscaler(model_name='net_g_1000000', tile_size=0),
+            creator=ZipCreator(),
+            storage=CloudStorage(),
+            downsampler=ParallelImageDownsampler()
+        )
+
+        job = {
+            'input': {
+                'input_url': 'https://storage.googleapis.com/bucket/input.zip',
+                'output_bucket': 'test-bucket',
+                'output_path': 'test/output.zip',
+                'downsample_scale': 1.5  # Invalid: upscaling not allowed
+            }
+        }
+
+        # When: Handle job
+        result = handler.handle(job)
+
+        # Then: Should reject with error
+        assert 'error' in result
+        assert 'downsample_scale' in result['error'].lower()

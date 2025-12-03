@@ -7,8 +7,8 @@ set -e  # Exit on error
 IMAGE_NAME="iankonradjohnson/realesrgan-runpod"
 VERSION="${1:-latest}"  # Default to 'latest' if no version specified
 
-echo "🐳 Building Docker image: ${IMAGE_NAME}:${VERSION}"
-docker build -t "${IMAGE_NAME}:${VERSION}" .
+echo "🐳 Building Docker image for linux/amd64: ${IMAGE_NAME}:${VERSION}"
+docker buildx build --platform linux/amd64 -t "${IMAGE_NAME}:${VERSION}" --load .
 
 echo "✅ Build complete!"
 echo ""

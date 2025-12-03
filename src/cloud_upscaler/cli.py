@@ -22,14 +22,25 @@ import argparse
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Upscale PNG images using Real-ESRGAN on cloud GPU',
+        description='Upscale images using Real-ESRGAN on cloud GPU',
         epilog='See MCP_SETUP.md for configuration details'
     )
-    parser.add_argument('input_dir', type=Path, help='Input directory with PNG files')
+    parser.add_argument('input_dir', type=Path, help='Input directory with image files (PNG, JPG, JPEG)')
     parser.add_argument('output_dir', type=Path, help='Output directory for upscaled files')
     parser.add_argument('--cloud', action='store_true', help='Use cloud processing (requires env vars)')
     parser.add_argument('--model', default='net_g_1000000', help='Model name (default: net_g_1000000)')
     parser.add_argument('--timeout', type=int, default=3600, help='Timeout in seconds (default: 3600)')
+
+    # GCS/Cloud parameters
+    parser.add_argument('--gcs-output-path', type=str, default='upscaled/output.zip',
+                        help='GCS output path for cloud processing (default: upscaled/output.zip)')
+
+    # Real-ESRGAN specific parameters
+    parser.add_argument('--tile-size', type=int, default=0, help='Tile size for processing (0=auto, default: 0)')
+    parser.add_argument('--scale', type=int, default=4, help='Upscaling factor (default: 4)')
+    parser.add_argument('--face-enhance', action='store_true', help='Enable face enhancement (default: False)')
+    parser.add_argument('--fp32', action='store_true', help='Use FP32 precision instead of FP16 (default: False)')
+    parser.add_argument('--gpu-id', type=str, default='0', help='GPU device ID (default: "0")')
 
     args = parser.parse_args()
 
@@ -43,14 +54,18 @@ def main():
     # Create output directory if needed
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"Input:  {args.input_dir.absolute()}")
-    print(f"Output: {args.output_dir.absolute()}")
-    print(f"Mode:   {'Cloud' if args.cloud else 'Local (simulation)'}")
-    print()
+    print(f"Input:  {args.input_dir.absolute()}", flush=True)
+    print(f"Output: {args.output_dir.absolute()}", flush=True)
+    print(f"Mode:   {'Cloud' if args.cloud else 'Local (simulation)'}", flush=True)
+    print(flush=True)
 
-    # Count input files
-    png_files = list(args.input_dir.glob("*.png"))
-    print(f"Found {len(png_files)} PNG files")
+    # Count input files (PNG, JPG, JPEG)
+    import itertools
+    image_patterns = ["*.png", "*.jpg", "*.jpeg", "*.PNG", "*.JPG", "*.JPEG"]
+    image_files = list(itertools.chain.from_iterable(
+        args.input_dir.glob(pattern) for pattern in image_patterns
+    ))
+    print(f"Found {len(image_files)} image files", flush=True)
 
     # Setup providers if cloud mode
     storage_provider = None
@@ -74,35 +89,46 @@ def main():
             print("  - GCS_PROJECT_ID (optional)")
             sys.exit(1)
 
-        print(f"RunPod Endpoint: {endpoint_id}")
-        print(f"GCS Bucket: {bucket}")
-        print()
+        print(f"RunPod Endpoint: {endpoint_id}", flush=True)
+        print(f"GCS Bucket: {bucket}", flush=True)
+        print(flush=True)
 
         storage_provider = GoogleCloudStorageProvider(bucket, project_id)
         compute_provider = RunPodComputeProvider(
             api_key=api_key,
             endpoint_id=endpoint_id,
             output_bucket=bucket,
-            output_path="upscaled/output.zip"
+            output_path=args.gcs_output_path
         )
 
     # Run upscaling
-    print("Starting upscaling...")
+    print("Starting upscaling...", flush=True)
+
+    # Build Real-ESRGAN parameters
+    realesrgan_params = {
+        'tile_size': args.tile_size,
+        'scale': args.scale,
+        'face_enhance': args.face_enhance,
+        'fp32': args.fp32,
+        'gpu_id': args.gpu_id
+    }
+
     result = upscale_images(
         input_dir=args.input_dir,
         output_dir=args.output_dir,
         model_name=args.model,
         timeout_seconds=args.timeout,
         storage_provider=storage_provider,
-        compute_provider=compute_provider
+        compute_provider=compute_provider,
+        realesrgan_params=realesrgan_params
     )
 
-    print()
+    print(flush=True)
     if result.success:
-        print(f"✓ SUCCESS: Processed {result.images_processed} images")
-        print(f"Output files saved to: {args.output_dir.absolute()}")
+        print(f"✓ SUCCESS: Processed {result.images_processed} images", flush=True)
+        print(f"Output files saved to: {args.output_dir.absolute()}", flush=True)
     else:
-        print(f"✗ FAILED: {result.error}")
+        print(f"✗ FAILED: {result.error}", flush=True)
         sys.exit(1)
 
 
