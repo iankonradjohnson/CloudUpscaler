@@ -42,6 +42,10 @@ htmlcov/
 .env
 .env.local
 
+# Credentials
+gcs-credentials.json
+runpod-env-var.txt
+
 # Temporary files
 *.log
 *.tmp
