@@ -152,22 +152,29 @@ class Handler:
                 if downsample_scale < 1.0:
                     self.downsampler.downsample_directory(output_dir, downsample_scale)
 
-                # Create output ZIP
-                output_zip_path = temp_path / "output.zip"
                 # Collect all image files (PNG, JPG, JPEG)
                 output_files = []
                 for pattern in ["*.png", "*.jpg", "*.jpeg", "*.PNG", "*.JPG", "*.JPEG"]:
                     output_files.extend(output_dir.glob(pattern))
-                self.creator.create(output_files, output_zip_path)
 
-                # Upload to GCS
-                output_url = self.storage.upload_and_get_url(
-                    output_zip_path, output_bucket, output_path
+                # Upload images individually using StreamingImageUploader
+                from streaming_uploader import StreamingImageUploader
+                uploader = StreamingImageUploader.create_default(
+                    storage_client=self.storage,
+                    batch_size=10
+                )
+                gcs_prefix = output_path.replace('.zip', '')
+                image_urls = uploader.upload_images_streaming(
+                    image_paths=output_files,
+                    bucket=output_bucket,
+                    gcs_prefix=gcs_prefix
                 )
 
                 return {
                     'output': {
-                        'output_url': output_url
+                        'image_urls': image_urls,
+                        'image_count': len(image_urls),
+                        'gcs_prefix': gcs_prefix
                     }
                 }
 

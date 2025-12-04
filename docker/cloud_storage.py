@@ -26,8 +26,8 @@ class CloudStorage:
         bucket = client.bucket(bucket_name)
         blob = bucket.blob(blob_path)
 
-        # Upload file
-        blob.upload_from_filename(str(file_path))
+        # Upload file (with 60 minute timeout for large files up to 20GB)
+        blob.upload_from_filename(str(file_path), timeout=3600)
 
         # Generate signed URL (valid for 1 hour)
         signed_url = blob.generate_signed_url(

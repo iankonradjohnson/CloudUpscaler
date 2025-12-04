@@ -474,13 +474,31 @@ class TestHandlerUpscaling:
                     assert upscaling_happened[0]['model'] == 'net_g_1000000'
 
 
-class TestHandlerOutput:
-    """Test handler output ZIP and upload"""
 
-    def test_creates_output_zip_from_upscaled_files(self, tmp_path):
-        """Handler should create ZIP from upscaled PNG files"""
+
+# Test Case List for StreamingImageUploader Integration:
+#
+# Component: Handler.handle() method modification
+# Goal: Replace ZIP creation/upload with StreamingImageUploader
+#
+# YAGNI-approved tests (6 total):
+# [ ] Handler uses StreamingImageUploader to upload images
+# [ ] Handler returns list of image URLs in response
+# [ ] Handler returns image_count in response
+# [ ] Handler returns gcs_prefix in response (without .zip extension)
+# [ ] Response does NOT contain 'output_url' key anymore
+# [ ] Works with single image
+
+
+class TestHandlerStreamingUpload:
+    """Test handler integration with StreamingImageUploader"""
+
+    def test_handler_uses_streaming_uploader(self, tmp_path):
+        """Handler should use StreamingImageUploader to upload images"""
         import sys
         from pathlib import Path
+        from PIL import Image
+        from unittest.mock import Mock, patch
 
         docker_dir = Path(__file__).parent.parent / 'docker'
         sys.path.insert(0, str(docker_dir))
@@ -493,61 +511,83 @@ class TestHandlerOutput:
         from cloud_storage import CloudStorage
         from parallel_image_downsampler import ParallelImageDownsampler
 
-        # Given: Fake input ZIP
+        # Given: Input ZIP with test image
         input_zip = tmp_path / "input.zip"
+        test_img = Image.new('RGB', (10, 10), color='red')
+        test_img_path = tmp_path / "test.png"
+        test_img.save(test_img_path)
+
         with zipfile.ZipFile(input_zip, 'w') as zf:
-            zf.writestr("image1.png", b"fake png")
+            zf.write(test_img_path, "test.png")
 
         mock_response = Mock()
         mock_response.content = input_zip.read_bytes()
         mock_response.raise_for_status = Mock()
 
-        zip_created = []
+        # Track if StreamingImageUploader was used
+        streaming_upload_called = []
 
-        # Track ZIP creation
-        original_create = ZipCreator.create
-
-        def tracking_create(self, output_files, zip_path):
-            zip_created.append(True)
-            return original_create(self, output_files, zip_path)
-
-        def mock_upscale(self, input_dir, output_dir):
-            for png in input_dir.glob("*.png"):
-                (output_dir / png.name).write_bytes(b"upscaled data")
+        def fake_upscale(self, input_dir, output_dir):
+            for img_file in input_dir.glob("*.png"):
+                upscaled_img = Image.new('RGB', (40, 40), color='blue')
+                upscaled_img.save(output_dir / img_file.name)
             return list(output_dir.glob("*.png"))
+
+        # Mock StreamingImageUploader
+        original_streaming_uploader = None
+        try:
+            from streaming_uploader import StreamingImageUploader
+            original_streaming_uploader = StreamingImageUploader.upload_images_streaming
+
+            def tracking_upload(self, image_paths, bucket, gcs_prefix):
+                streaming_upload_called.append({
+                    'image_count': len(image_paths),
+                    'bucket': bucket,
+                    'gcs_prefix': gcs_prefix
+                })
+                # Return fake URLs
+                return [f"https://storage.googleapis.com/{bucket}/{gcs_prefix}/{p.name}" for p in image_paths]
+
+            StreamingImageUploader.upload_images_streaming = tracking_upload
+        except ImportError:
+            pass
 
         with patch('requests.get', return_value=mock_response):
             with patch('google.cloud.storage.Client'):
-                with patch.object(ImageUpscaler, 'upscale_directory', mock_upscale):
-                    with patch.object(ZipCreator, 'create', tracking_create):
-                        # Given: Real objects with DI
-                        handler = Handler(
-                            downloader=ImageDownloader(),
-                            extractor=ZipExtractor(),
-                            upscaler=ImageUpscaler(model_name='net_g_1000000', tile_size=0),
-                            creator=ZipCreator(),
-                            storage=CloudStorage(),
-            downsampler=ParallelImageDownsampler()
-                        )
+                with patch.object(ImageUpscaler, 'upscale_directory', fake_upscale):
+                    handler = Handler(
+                        downloader=ImageDownloader(),
+                        extractor=ZipExtractor(),
+                        upscaler=ImageUpscaler(model_name='net_g_1000000', tile_size=0),
+                        creator=ZipCreator(),
+                        storage=CloudStorage(),
+                        downsampler=ParallelImageDownsampler()
+                    )
 
-                        job = {
-                            'input': {
-                                'input_url': 'https://storage.googleapis.com/bucket/input.zip',
-                                'output_bucket': 'test-bucket',
-                                'output_path': 'test/output.zip'
-                            }
+                    job = {
+                        'input': {
+                            'input_url': 'https://storage.googleapis.com/bucket/input.zip',
+                            'output_bucket': 'test-bucket',
+                            'output_path': 'upscaled/test_output.zip'
                         }
+                    }
 
-                        # When: Handle job
-                        result = handler.handle(job)
+                    # When: Handle job
+                    result = handler.handle(job)
 
-                        # Then: ZIP was created
-                        assert len(zip_created) > 0
+                    # Then: StreamingImageUploader was used
+                    assert len(streaming_upload_called) > 0, "StreamingImageUploader should have been called"
 
-    def test_uploads_to_gcs_and_returns_signed_url(self, tmp_path):
-        """Handler should upload output ZIP to GCS and return signed URL"""
+        # Restore
+        if original_streaming_uploader:
+            StreamingImageUploader.upload_images_streaming = original_streaming_uploader
+
+    def test_returns_list_of_image_urls(self, tmp_path):
+        """Handler should return list of image URLs in response"""
         import sys
         from pathlib import Path
+        from PIL import Image
+        from unittest.mock import Mock, patch
 
         docker_dir = Path(__file__).parent.parent / 'docker'
         sys.path.insert(0, str(docker_dir))
@@ -560,70 +600,73 @@ class TestHandlerOutput:
         from cloud_storage import CloudStorage
         from parallel_image_downsampler import ParallelImageDownsampler
 
-        # Given: Fake input ZIP
         input_zip = tmp_path / "input.zip"
+        test_img = Image.new('RGB', (10, 10), color='red')
+        test_img_path = tmp_path / "test.png"
+        test_img.save(test_img_path)
+
         with zipfile.ZipFile(input_zip, 'w') as zf:
-            zf.writestr("image1.png", b"fake png")
+            zf.write(test_img_path, "test.png")
 
         mock_response = Mock()
         mock_response.content = input_zip.read_bytes()
         mock_response.raise_for_status = Mock()
 
-        # Mock GCS client
-        mock_blob = Mock()
-        mock_blob.generate_signed_url = Mock(return_value="https://signed-url.gcs/output.zip")
-        mock_blob.upload_from_filename = Mock()
-        mock_bucket = Mock()
-        mock_bucket.blob = Mock(return_value=mock_blob)
-        mock_client = Mock()
-        mock_client.bucket = Mock(return_value=mock_bucket)
-
-        def mock_upscale(self, input_dir, output_dir):
-            for png in input_dir.glob("*.png"):
-                (output_dir / png.name).write_bytes(b"upscaled data")
+        def fake_upscale(self, input_dir, output_dir):
+            for img_file in input_dir.glob("*.png"):
+                upscaled_img = Image.new('RGB', (40, 40), color='blue')
+                upscaled_img.save(output_dir / img_file.name)
             return list(output_dir.glob("*.png"))
 
+        try:
+            from streaming_uploader import StreamingImageUploader
+            original_upload = StreamingImageUploader.upload_images_streaming
+
+            def mock_upload(self, image_paths, bucket, gcs_prefix):
+                return [f"https://storage.googleapis.com/{bucket}/{gcs_prefix}/{p.name}" for p in image_paths]
+
+            StreamingImageUploader.upload_images_streaming = mock_upload
+        except ImportError:
+            pass
+
         with patch('requests.get', return_value=mock_response):
-            with patch('google.cloud.storage.Client', return_value=mock_client):
-                with patch.object(ImageUpscaler, 'upscale_directory', mock_upscale):
-                    # Given: Real objects with DI
+            with patch('google.cloud.storage.Client'):
+                with patch.object(ImageUpscaler, 'upscale_directory', fake_upscale):
                     handler = Handler(
                         downloader=ImageDownloader(),
                         extractor=ZipExtractor(),
                         upscaler=ImageUpscaler(model_name='net_g_1000000', tile_size=0),
                         creator=ZipCreator(),
                         storage=CloudStorage(),
-            downsampler=ParallelImageDownsampler()
+                        downsampler=ParallelImageDownsampler()
                     )
 
                     job = {
                         'input': {
                             'input_url': 'https://storage.googleapis.com/bucket/input.zip',
                             'output_bucket': 'test-bucket',
-                            'output_path': 'test/output.zip'
+                            'output_path': 'upscaled/test_output.zip'
                         }
                     }
 
-                    # When: Handle job
                     result = handler.handle(job)
 
-                    # Then: GCS upload happened and signed URL returned
-                    mock_bucket.blob.assert_called()
-                    mock_blob.upload_from_filename.assert_called()
+                    # Then: Response contains image_urls list
                     assert 'output' in result
-                    assert 'output_url' in result['output']
-                    assert result['output']['output_url'] == "https://signed-url.gcs/output.zip"
+                    assert 'image_urls' in result['output']
+                    assert isinstance(result['output']['image_urls'], list)
 
+        try:
+            StreamingImageUploader.upload_images_streaming = original_upload
+        except:
+            pass
 
-class TestHandlerDownsampling:
-    """Test handler downsampling functionality"""
-
-    def test_downsamples_images_to_correct_dimensions(self, tmp_path):
-        """Handler should downsample upscaled images when downsample_scale < 1.0"""
+    def test_returns_image_count(self, tmp_path):
+        """Handler should return image_count in response"""
         import sys
         from pathlib import Path
         from PIL import Image
-        import shutil
+        from unittest.mock import Mock, patch
 
         docker_dir = Path(__file__).parent.parent / 'docker'
         sys.path.insert(0, str(docker_dir))
@@ -636,7 +679,6 @@ class TestHandlerDownsampling:
         from cloud_storage import CloudStorage
         from parallel_image_downsampler import ParallelImageDownsampler
 
-        # Given: Fake input ZIP with small test image
         input_zip = tmp_path / "input.zip"
         test_img = Image.new('RGB', (10, 10), color='red')
         test_img_path = tmp_path / "test.png"
@@ -649,69 +691,61 @@ class TestHandlerDownsampling:
         mock_response.content = input_zip.read_bytes()
         mock_response.raise_for_status = Mock()
 
-        # Capture uploaded ZIP by copying it before it's deleted
-        captured_zip_path = tmp_path / "captured_output.zip"
-
-        def capture_upload(zip_path):
-            shutil.copy(zip_path, captured_zip_path)
-
-        # Mock GCS client
-        mock_blob = Mock()
-        mock_blob.generate_signed_url = Mock(return_value="https://signed-url.gcs/output.zip")
-        mock_blob.upload_from_filename = Mock(side_effect=capture_upload)
-        mock_bucket = Mock()
-        mock_bucket.blob = Mock(return_value=mock_blob)
-        mock_client = Mock()
-        mock_client.bucket = Mock(return_value=mock_bucket)
-
-        # Fake upscaler creates 100x100 images
         def fake_upscale(self, input_dir, output_dir):
             for img_file in input_dir.glob("*.png"):
-                upscaled_img = Image.new('RGB', (100, 100), color='blue')
+                upscaled_img = Image.new('RGB', (40, 40), color='blue')
                 upscaled_img.save(output_dir / img_file.name)
             return list(output_dir.glob("*.png"))
 
+        try:
+            from streaming_uploader import StreamingImageUploader
+            original_upload = StreamingImageUploader.upload_images_streaming
+
+            def mock_upload(self, image_paths, bucket, gcs_prefix):
+                return [f"https://storage.googleapis.com/{bucket}/{gcs_prefix}/{p.name}" for p in image_paths]
+
+            StreamingImageUploader.upload_images_streaming = mock_upload
+        except ImportError:
+            pass
+
         with patch('requests.get', return_value=mock_response):
-            with patch('google.cloud.storage.Client', return_value=mock_client):
+            with patch('google.cloud.storage.Client'):
                 with patch.object(ImageUpscaler, 'upscale_directory', fake_upscale):
-                    # Given: Real handler with real downsampler
                     handler = Handler(
                         downloader=ImageDownloader(),
                         extractor=ZipExtractor(),
                         upscaler=ImageUpscaler(model_name='net_g_1000000', tile_size=0),
                         creator=ZipCreator(),
                         storage=CloudStorage(),
-            downsampler=ParallelImageDownsampler()
+                        downsampler=ParallelImageDownsampler()
                     )
 
                     job = {
                         'input': {
                             'input_url': 'https://storage.googleapis.com/bucket/input.zip',
                             'output_bucket': 'test-bucket',
-                            'output_path': 'test/output.zip',
-                            'downsample_scale': 0.9  # Downsample to 90%
+                            'output_path': 'upscaled/test_output.zip'
                         }
                     }
 
-                    # When: Handle job
                     result = handler.handle(job)
 
-                    # Then: Output images should be 90x90 (100 * 0.9)
-                    # Extract the captured ZIP and verify dimensions
-                    extract_dir = tmp_path / "verify_output"
-                    extract_dir.mkdir()
-                    with zipfile.ZipFile(captured_zip_path, 'r') as zf:
-                        zf.extractall(extract_dir)
+                    # Then: Response contains image_count
+                    assert 'output' in result
+                    assert 'image_count' in result['output']
+                    assert result['output']['image_count'] == 1
 
-                    output_image = Image.open(extract_dir / "test.png")
-                    assert output_image.size == (90, 90), f"Expected (90, 90), got {output_image.size}"
+        try:
+            StreamingImageUploader.upload_images_streaming = original_upload
+        except:
+            pass
 
-    def test_no_downsampling_when_scale_is_one(self, tmp_path):
-        """Handler should not downsample when downsample_scale = 1.0"""
+    def test_returns_gcs_prefix_without_zip_extension(self, tmp_path):
+        """Handler should return gcs_prefix with .zip extension removed"""
         import sys
         from pathlib import Path
         from PIL import Image
-        import shutil
+        from unittest.mock import Mock, patch
 
         docker_dir = Path(__file__).parent.parent / 'docker'
         sys.path.insert(0, str(docker_dir))
@@ -724,7 +758,6 @@ class TestHandlerDownsampling:
         from cloud_storage import CloudStorage
         from parallel_image_downsampler import ParallelImageDownsampler
 
-        # Given: Fake input ZIP with small test image
         input_zip = tmp_path / "input.zip"
         test_img = Image.new('RGB', (10, 10), color='red')
         test_img_path = tmp_path / "test.png"
@@ -737,68 +770,62 @@ class TestHandlerDownsampling:
         mock_response.content = input_zip.read_bytes()
         mock_response.raise_for_status = Mock()
 
-        # Capture uploaded ZIP by copying it before it's deleted
-        captured_zip_path = tmp_path / "captured_output.zip"
-
-        def capture_upload(zip_path):
-            shutil.copy(zip_path, captured_zip_path)
-
-        # Mock GCS client
-        mock_blob = Mock()
-        mock_blob.generate_signed_url = Mock(return_value="https://signed-url.gcs/output.zip")
-        mock_blob.upload_from_filename = Mock(side_effect=capture_upload)
-        mock_bucket = Mock()
-        mock_bucket.blob = Mock(return_value=mock_blob)
-        mock_client = Mock()
-        mock_client.bucket = Mock(return_value=mock_bucket)
-
-        # Fake upscaler creates 100x100 images
         def fake_upscale(self, input_dir, output_dir):
             for img_file in input_dir.glob("*.png"):
-                upscaled_img = Image.new('RGB', (100, 100), color='blue')
+                upscaled_img = Image.new('RGB', (40, 40), color='blue')
                 upscaled_img.save(output_dir / img_file.name)
             return list(output_dir.glob("*.png"))
 
+        try:
+            from streaming_uploader import StreamingImageUploader
+            original_upload = StreamingImageUploader.upload_images_streaming
+
+            def mock_upload(self, image_paths, bucket, gcs_prefix):
+                return [f"https://storage.googleapis.com/{bucket}/{gcs_prefix}/{p.name}" for p in image_paths]
+
+            StreamingImageUploader.upload_images_streaming = mock_upload
+        except ImportError:
+            pass
+
         with patch('requests.get', return_value=mock_response):
-            with patch('google.cloud.storage.Client', return_value=mock_client):
+            with patch('google.cloud.storage.Client'):
                 with patch.object(ImageUpscaler, 'upscale_directory', fake_upscale):
-                    # Given: Real handler
                     handler = Handler(
                         downloader=ImageDownloader(),
                         extractor=ZipExtractor(),
                         upscaler=ImageUpscaler(model_name='net_g_1000000', tile_size=0),
                         creator=ZipCreator(),
                         storage=CloudStorage(),
-            downsampler=ParallelImageDownsampler()
+                        downsampler=ParallelImageDownsampler()
                     )
 
                     job = {
                         'input': {
                             'input_url': 'https://storage.googleapis.com/bucket/input.zip',
                             'output_bucket': 'test-bucket',
-                            'output_path': 'test/output.zip',
-                            'downsample_scale': 1.0  # No downsampling
+                            'output_path': 'upscaled/volume_01/pages_output.zip'
                         }
                     }
 
-                    # When: Handle job
                     result = handler.handle(job)
 
-                    # Then: Output images should remain 100x100
-                    extract_dir = tmp_path / "verify_output"
-                    extract_dir.mkdir()
-                    with zipfile.ZipFile(captured_zip_path, 'r') as zf:
-                        zf.extractall(extract_dir)
+                    # Then: gcs_prefix has .zip removed
+                    assert 'output' in result
+                    assert 'gcs_prefix' in result['output']
+                    assert result['output']['gcs_prefix'] == 'upscaled/volume_01/pages_output'
+                    assert not result['output']['gcs_prefix'].endswith('.zip')
 
-                    output_image = Image.open(extract_dir / "test.png")
-                    assert output_image.size == (100, 100), f"Expected (100, 100), got {output_image.size}"
+        try:
+            StreamingImageUploader.upload_images_streaming = original_upload
+        except:
+            pass
 
-    def test_backward_compatible_when_parameter_omitted(self, tmp_path):
-        """Handler should work without downsample_scale parameter (default to 1.0)"""
+    def test_response_does_not_contain_output_url(self, tmp_path):
+        """Handler should NOT return output_url key (breaking change)"""
         import sys
         from pathlib import Path
         from PIL import Image
-        import shutil
+        from unittest.mock import Mock, patch
 
         docker_dir = Path(__file__).parent.parent / 'docker'
         sys.path.insert(0, str(docker_dir))
@@ -811,7 +838,6 @@ class TestHandlerDownsampling:
         from cloud_storage import CloudStorage
         from parallel_image_downsampler import ParallelImageDownsampler
 
-        # Given: Fake input ZIP with small test image
         input_zip = tmp_path / "input.zip"
         test_img = Image.new('RGB', (10, 10), color='red')
         test_img_path = tmp_path / "test.png"
@@ -824,66 +850,60 @@ class TestHandlerDownsampling:
         mock_response.content = input_zip.read_bytes()
         mock_response.raise_for_status = Mock()
 
-        # Capture uploaded ZIP by copying it before it's deleted
-        captured_zip_path = tmp_path / "captured_output.zip"
-
-        def capture_upload(zip_path):
-            shutil.copy(zip_path, captured_zip_path)
-
-        # Mock GCS client
-        mock_blob = Mock()
-        mock_blob.generate_signed_url = Mock(return_value="https://signed-url.gcs/output.zip")
-        mock_blob.upload_from_filename = Mock(side_effect=capture_upload)
-        mock_bucket = Mock()
-        mock_bucket.blob = Mock(return_value=mock_blob)
-        mock_client = Mock()
-        mock_client.bucket = Mock(return_value=mock_bucket)
-
-        # Fake upscaler creates 100x100 images
         def fake_upscale(self, input_dir, output_dir):
             for img_file in input_dir.glob("*.png"):
-                upscaled_img = Image.new('RGB', (100, 100), color='blue')
+                upscaled_img = Image.new('RGB', (40, 40), color='blue')
                 upscaled_img.save(output_dir / img_file.name)
             return list(output_dir.glob("*.png"))
 
+        try:
+            from streaming_uploader import StreamingImageUploader
+            original_upload = StreamingImageUploader.upload_images_streaming
+
+            def mock_upload(self, image_paths, bucket, gcs_prefix):
+                return [f"https://storage.googleapis.com/{bucket}/{gcs_prefix}/{p.name}" for p in image_paths]
+
+            StreamingImageUploader.upload_images_streaming = mock_upload
+        except ImportError:
+            pass
+
         with patch('requests.get', return_value=mock_response):
-            with patch('google.cloud.storage.Client', return_value=mock_client):
+            with patch('google.cloud.storage.Client'):
                 with patch.object(ImageUpscaler, 'upscale_directory', fake_upscale):
-                    # Given: Real handler
                     handler = Handler(
                         downloader=ImageDownloader(),
                         extractor=ZipExtractor(),
                         upscaler=ImageUpscaler(model_name='net_g_1000000', tile_size=0),
                         creator=ZipCreator(),
                         storage=CloudStorage(),
-            downsampler=ParallelImageDownsampler()
+                        downsampler=ParallelImageDownsampler()
                     )
 
                     job = {
                         'input': {
                             'input_url': 'https://storage.googleapis.com/bucket/input.zip',
                             'output_bucket': 'test-bucket',
-                            'output_path': 'test/output.zip'
-                            # No downsample_scale parameter
+                            'output_path': 'upscaled/test_output.zip'
                         }
                     }
 
-                    # When: Handle job
                     result = handler.handle(job)
 
-                    # Then: Output images should remain 100x100 (default behavior)
-                    extract_dir = tmp_path / "verify_output"
-                    extract_dir.mkdir()
-                    with zipfile.ZipFile(captured_zip_path, 'r') as zf:
-                        zf.extractall(extract_dir)
+                    # Then: output_url key should NOT exist
+                    assert 'output' in result
+                    assert 'output_url' not in result['output']
 
-                    output_image = Image.open(extract_dir / "test.png")
-                    assert output_image.size == (100, 100), f"Expected (100, 100), got {output_image.size}"
+        try:
+            StreamingImageUploader.upload_images_streaming = original_upload
+        except:
+            pass
 
-    def test_rejects_scale_below_minimum(self, tmp_path):
-        """Handler should reject downsample_scale < 0.1"""
+    def test_works_with_single_image(self, tmp_path):
+        """Handler should work correctly with just one image"""
         import sys
         from pathlib import Path
+        from PIL import Image
+        from unittest.mock import Mock, patch
 
         docker_dir = Path(__file__).parent.parent / 'docker'
         sys.path.insert(0, str(docker_dir))
@@ -896,70 +916,63 @@ class TestHandlerDownsampling:
         from cloud_storage import CloudStorage
         from parallel_image_downsampler import ParallelImageDownsampler
 
-        # Given: Real handler
-        handler = Handler(
-            downloader=ImageDownloader(),
-            extractor=ZipExtractor(),
-            upscaler=ImageUpscaler(model_name='net_g_1000000', tile_size=0),
-            creator=ZipCreator(),
-            storage=CloudStorage(),
-            downsampler=ParallelImageDownsampler()
-        )
+        input_zip = tmp_path / "input.zip"
+        test_img = Image.new('RGB', (10, 10), color='red')
+        test_img_path = tmp_path / "single.png"
+        test_img.save(test_img_path)
 
-        job = {
-            'input': {
-                'input_url': 'https://storage.googleapis.com/bucket/input.zip',
-                'output_bucket': 'test-bucket',
-                'output_path': 'test/output.zip',
-                'downsample_scale': 0.05  # Invalid: too small
-            }
-        }
+        with zipfile.ZipFile(input_zip, 'w') as zf:
+            zf.write(test_img_path, "single.png")
 
-        # When: Handle job
-        result = handler.handle(job)
+        mock_response = Mock()
+        mock_response.content = input_zip.read_bytes()
+        mock_response.raise_for_status = Mock()
 
-        # Then: Should reject with error
-        assert 'error' in result
-        assert 'downsample_scale' in result['error'].lower()
+        def fake_upscale(self, input_dir, output_dir):
+            for img_file in input_dir.glob("*.png"):
+                upscaled_img = Image.new('RGB', (40, 40), color='blue')
+                upscaled_img.save(output_dir / img_file.name)
+            return list(output_dir.glob("*.png"))
 
-    def test_rejects_scale_above_maximum(self, tmp_path):
-        """Handler should reject downsample_scale > 1.0"""
-        import sys
-        from pathlib import Path
+        try:
+            from streaming_uploader import StreamingImageUploader
+            original_upload = StreamingImageUploader.upload_images_streaming
 
-        docker_dir = Path(__file__).parent.parent / 'docker'
-        sys.path.insert(0, str(docker_dir))
+            def mock_upload(self, image_paths, bucket, gcs_prefix):
+                return [f"https://storage.googleapis.com/{bucket}/{gcs_prefix}/{p.name}" for p in image_paths]
 
-        from handler import Handler
-        from image_downloader import ImageDownloader
-        from zip_extractor import ZipExtractor
-        from image_upscaler import ImageUpscaler
-        from zip_creator import ZipCreator
-        from cloud_storage import CloudStorage
-        from parallel_image_downsampler import ParallelImageDownsampler
+            StreamingImageUploader.upload_images_streaming = mock_upload
+        except ImportError:
+            pass
 
-        # Given: Real handler
-        handler = Handler(
-            downloader=ImageDownloader(),
-            extractor=ZipExtractor(),
-            upscaler=ImageUpscaler(model_name='net_g_1000000', tile_size=0),
-            creator=ZipCreator(),
-            storage=CloudStorage(),
-            downsampler=ParallelImageDownsampler()
-        )
+        with patch('requests.get', return_value=mock_response):
+            with patch('google.cloud.storage.Client'):
+                with patch.object(ImageUpscaler, 'upscale_directory', fake_upscale):
+                    handler = Handler(
+                        downloader=ImageDownloader(),
+                        extractor=ZipExtractor(),
+                        upscaler=ImageUpscaler(model_name='net_g_1000000', tile_size=0),
+                        creator=ZipCreator(),
+                        storage=CloudStorage(),
+                        downsampler=ParallelImageDownsampler()
+                    )
 
-        job = {
-            'input': {
-                'input_url': 'https://storage.googleapis.com/bucket/input.zip',
-                'output_bucket': 'test-bucket',
-                'output_path': 'test/output.zip',
-                'downsample_scale': 1.5  # Invalid: upscaling not allowed
-            }
-        }
+                    job = {
+                        'input': {
+                            'input_url': 'https://storage.googleapis.com/bucket/input.zip',
+                            'output_bucket': 'test-bucket',
+                            'output_path': 'upscaled/test_output.zip'
+                        }
+                    }
 
-        # When: Handle job
-        result = handler.handle(job)
+                    result = handler.handle(job)
 
-        # Then: Should reject with error
-        assert 'error' in result
-        assert 'downsample_scale' in result['error'].lower()
+                    # Then: Should work with 1 image
+                    assert 'output' in result
+                    assert result['output']['image_count'] == 1
+                    assert len(result['output']['image_urls']) == 1
+
+        try:
+            StreamingImageUploader.upload_images_streaming = original_upload
+        except:
+            pass

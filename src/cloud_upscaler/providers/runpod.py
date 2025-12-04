@@ -57,6 +57,11 @@ class RunPodComputeProvider:
             headers={"Authorization": f"Bearer {self.api_key}"}
         )
         result = response.json()
+
+        # Handle case where job doesn't exist or was deleted
+        if "status" not in result:
+            return "NOT_FOUND"
+
         return result["status"]
 
     def get_job_output_url(self, job_id: str) -> str:
