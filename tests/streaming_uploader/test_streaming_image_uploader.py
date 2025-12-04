@@ -231,9 +231,9 @@ def given_storage_that_fails_after(count: int):
 def when_uploader_created(storage: FakeCloudStorage, batch_size: int):
     import sys
     from pathlib import Path
-    docker_path = Path(__file__).parent.parent / "docker"
-    sys.path.insert(0, str(docker_path))
-    from streaming_image_uploader import StreamingImageUploader
+    repo_root = Path(__file__).parent.parent.parent
+    sys.path.insert(0, str(repo_root))
+    from docker.streaming_uploader import StreamingImageUploader
     return StreamingImageUploader.create_default(storage, batch_size)
 
 
