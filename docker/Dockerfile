@@ -67,6 +67,7 @@ COPY multi_gpu_upscaler.py /app/
 COPY zip_creator.py /app/
 COPY cloud_storage.py /app/
 COPY parallel_image_downsampler.py /app/
+COPY streaming_uploader/ /app/streaming_uploader/
 
 # Set Google Cloud credentials path (will be set at runtime via env var)
 ENV GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcs_credentials.json
