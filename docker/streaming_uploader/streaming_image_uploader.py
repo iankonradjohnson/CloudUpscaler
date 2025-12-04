@@ -1,7 +1,10 @@
 from pathlib import Path
+import logging
 from .batch_creator import BatchCreator
 from .parallel_batch_uploader import ParallelBatchUploader
 from .worker_thread_coordinator import WorkerThreadCoordinator
+
+logger = logging.getLogger(__name__)
 
 
 class StreamingImageUploader:
@@ -33,6 +36,9 @@ class StreamingImageUploader:
         bucket: str,
         gcs_prefix: str
     ) -> list[str]:
+        total_images = len(image_paths)
+        logger.info(f"Starting streaming upload of {total_images} images to gs://{bucket}/{gcs_prefix}")
+
         def process_batch(batch):
             return self.batch_uploader.upload_batch(batch, bucket, gcs_prefix)
 
@@ -40,7 +46,14 @@ class StreamingImageUploader:
         coordinator.start()
 
         batches = self.batch_creator.create_batches(image_paths, self.batch_size)
-        for batch in batches:
+        total_batches = len(batches)
+        logger.info(f"Created {total_batches} batches (batch_size={self.batch_size})")
+
+        for i, batch in enumerate(batches, 1):
+            logger.debug(f"Enqueueing batch {i}/{total_batches} ({len(batch)} images)")
             coordinator.enqueue_task(batch)
 
-        return coordinator.wait_for_completion()
+        logger.info(f"All batches enqueued, waiting for uploads to complete...")
+        result = coordinator.wait_for_completion()
+        logger.info(f"✓ Upload complete: {len(result)} images uploaded successfully")
+        return result

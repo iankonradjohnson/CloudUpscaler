@@ -1,5 +1,8 @@
 from pathlib import Path
+import logging
 from concurrent.futures import ThreadPoolExecutor
+
+logger = logging.getLogger(__name__)
 
 
 class ParallelBatchUploader:
@@ -11,6 +14,7 @@ class ParallelBatchUploader:
         self.max_workers = max_workers
 
     def upload_batch(self, batch: list[Path], bucket: str, gcs_prefix: str) -> list[str]:
+        logger.debug(f"Uploading batch of {len(batch)} images with {self.max_workers} parallel workers")
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             futures = [
                 executor.submit(
@@ -22,4 +26,6 @@ class ParallelBatchUploader:
                 for img_path in batch
             ]
 
-            return [future.result() for future in futures]
+            results = [future.result() for future in futures]
+            logger.debug(f"Batch upload complete: {len(results)} images uploaded")
+            return results
