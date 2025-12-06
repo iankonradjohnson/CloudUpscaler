@@ -209,19 +209,9 @@ class Handler:
 if __name__ == "__main__":
     import runpod
 
-    # Setup GCS credentials from environment variable if provided
-    gcs_creds_json = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS_JSON')
-    if gcs_creds_json:
-        # Write credentials to file
-        creds_path = '/tmp/gcs_credentials.json'
-        with open(creds_path, 'w') as f:
-            # Handle both string and already-parsed dict
-            if isinstance(gcs_creds_json, str):
-                f.write(gcs_creds_json)
-            else:
-                json.dump(gcs_creds_json, f)
-        os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = creds_path
-        print(f"✓ GCS credentials loaded from environment variable")
+    # GCS credentials are embedded in the Docker image at /app/gcs_credentials.json
+    # The GOOGLE_APPLICATION_CREDENTIALS env var is set in Dockerfile
+    print(f"✓ Using GCS credentials from {os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')}")
 
     # Create dependencies
     model_name = 'net_g_1000000'
