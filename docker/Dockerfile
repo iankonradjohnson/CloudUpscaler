@@ -69,7 +69,10 @@ COPY cloud_storage.py /app/
 COPY parallel_image_downsampler.py /app/
 COPY streaming_uploader/ /app/streaming_uploader/
 
-# Set Google Cloud credentials path (will be set at runtime via env var)
+# Copy GCS credentials into the image
+COPY gcs_credentials.json /tmp/gcs_credentials.json
+
+# Set Google Cloud credentials path
 ENV GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcs_credentials.json
 
 # RunPod serverless entrypoint

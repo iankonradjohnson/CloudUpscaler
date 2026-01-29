@@ -5,6 +5,9 @@ Cloud storage operations for GCS.
 from pathlib import Path
 from google.cloud import storage
 from datetime import timedelta
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class CloudStorage:
@@ -27,7 +30,9 @@ class CloudStorage:
         blob = bucket.blob(blob_path)
 
         # Upload file (with 60 minute timeout for large files up to 20GB)
+        logger.info(f"Uploading {file_path.name} to gs://{bucket_name}/{blob_path}")
         blob.upload_from_filename(str(file_path), timeout=3600)
+        logger.info(f"✓ Uploaded {file_path.name} successfully")
 
         # Generate signed URL (valid for 1 hour)
         signed_url = blob.generate_signed_url(

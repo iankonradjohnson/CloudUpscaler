@@ -14,7 +14,8 @@ class ParallelBatchUploader:
         self.max_workers = max_workers
 
     def upload_batch(self, batch: list[Path], bucket: str, gcs_prefix: str) -> list[str]:
-        logger.debug(f"Uploading batch of {len(batch)} images with {self.max_workers} parallel workers")
+        print(f"⬆️  Starting batch upload: {len(batch)} images to gs://{bucket}/{gcs_prefix}", flush=True)
+        logger.info(f"Uploading batch of {len(batch)} images with {self.max_workers} parallel workers")
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             futures = [
                 executor.submit(
@@ -27,5 +28,6 @@ class ParallelBatchUploader:
             ]
 
             results = [future.result() for future in futures]
-            logger.debug(f"Batch upload complete: {len(results)} images uploaded")
+            print(f"✅ Batch upload complete: {len(results)} images uploaded to GCS", flush=True)
+            logger.info(f"Batch upload complete: {len(results)} images uploaded")
             return results

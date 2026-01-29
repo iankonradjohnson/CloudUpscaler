@@ -37,6 +37,12 @@ class StreamingImageUploader:
         gcs_prefix: str
     ) -> list[str]:
         total_images = len(image_paths)
+        print(f"\n{'='*60}", flush=True)
+        print(f"📤 STARTING STREAMING UPLOAD", flush=True)
+        print(f"   Total images: {total_images}", flush=True)
+        print(f"   Batch size: {self.batch_size}", flush=True)
+        print(f"   Destination: gs://{bucket}/{gcs_prefix}", flush=True)
+        print(f"{'='*60}\n", flush=True)
         logger.info(f"Starting streaming upload of {total_images} images to gs://{bucket}/{gcs_prefix}")
 
         def process_batch(batch):
@@ -47,13 +53,19 @@ class StreamingImageUploader:
 
         batches = self.batch_creator.create_batches(image_paths, self.batch_size)
         total_batches = len(batches)
+        print(f"📦 Created {total_batches} batches of ~{self.batch_size} images each", flush=True)
         logger.info(f"Created {total_batches} batches (batch_size={self.batch_size})")
 
         for i, batch in enumerate(batches, 1):
-            logger.debug(f"Enqueueing batch {i}/{total_batches} ({len(batch)} images)")
+            print(f"🔄 Enqueueing batch {i}/{total_batches} ({len(batch)} images)", flush=True)
+            logger.info(f"Enqueueing batch {i}/{total_batches} ({len(batch)} images)")
             coordinator.enqueue_task(batch)
 
+        print(f"\n⏳ All batches enqueued, waiting for uploads to complete...\n", flush=True)
         logger.info(f"All batches enqueued, waiting for uploads to complete...")
         result = coordinator.wait_for_completion()
+        print(f"\n{'='*60}", flush=True)
+        print(f"✅ UPLOAD COMPLETE: {len(result)} images uploaded successfully", flush=True)
+        print(f"{'='*60}\n", flush=True)
         logger.info(f"✓ Upload complete: {len(result)} images uploaded successfully")
         return result

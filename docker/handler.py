@@ -6,6 +6,7 @@ import os
 import json
 import tempfile
 import traceback
+import logging
 from pathlib import Path
 from zip_extractor import ZipExtractor
 from zip_creator import ZipCreator
@@ -14,6 +15,12 @@ from multi_gpu_upscaler import MultiGPUUpscaler
 from cloud_storage import CloudStorage
 from image_downloader import ImageDownloader
 from parallel_image_downsampler import ParallelImageDownsampler
+
+# Configure logging to show INFO level messages
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 
 
 class Handler:
@@ -143,32 +150,174 @@ class Handler:
                         # Use pre-injected upscaler (for testing)
                         upscaler = self.upscaler
 
-                # Upscale images with Real-ESRGAN
+                # Upscale and upload in batches for progressive streaming
                 output_dir = temp_path / "output"
                 output_dir.mkdir()
-                upscaler.upscale_directory(input_dir, output_dir)
 
-                # Downsample if needed
-                if downsample_scale < 1.0:
-                    self.downsampler.downsample_directory(output_dir, downsample_scale)
+                # Collect all input image files
+                import itertools
+                image_patterns = ["*.png", "*.jpg", "*.jpeg", "*.PNG", "*.JPG", "*.JPEG"]
+                input_files = list(itertools.chain.from_iterable(
+                    input_dir.glob(pattern) for pattern in image_patterns
+                ))
 
-                # Collect all image files (PNG, JPG, JPEG)
-                output_files = []
-                for pattern in ["*.png", "*.jpg", "*.jpeg", "*.PNG", "*.JPG", "*.JPEG"]:
-                    output_files.extend(output_dir.glob(pattern))
+                print(f"\n{'='*60}", flush=True)
+                print(f"🎨 UPSCALING AND UPLOADING IN BATCHES", flush=True)
+                print(f"   Total images: {len(input_files)}", flush=True)
+                print(f"   Batch size: 10 images", flush=True)
+                print(f"   Destination: gs://{output_bucket}/{output_path.replace('.zip', '')}", flush=True)
+                print(f"{'='*60}\n", flush=True)
 
-                # Upload images individually using StreamingImageUploader
-                from streaming_uploader import StreamingImageUploader
-                uploader = StreamingImageUploader.create_default(
-                    storage_client=self.storage,
-                    batch_size=10
-                )
+                # Process in batches of 10 with background uploading
+                import queue
+                import threading
+                from concurrent.futures import ThreadPoolExecutor
+
+                batch_size = 10
                 gcs_prefix = output_path.replace('.zip', '')
-                image_urls = uploader.upload_images_streaming(
-                    image_paths=output_files,
-                    bucket=output_bucket,
-                    gcs_prefix=gcs_prefix
-                )
+                all_image_urls = []
+                all_urls_lock = threading.Lock()
+                upload_queue = queue.Queue()
+
+                # Upload worker thread
+                def upload_worker():
+                    """Background worker that processes upload queue."""
+                    while True:
+                        item = upload_queue.get()
+
+                        if item is None:  # Poison pill
+                            upload_queue.task_done()
+                            break
+
+                        batch_num, batch_files = item
+
+                        try:
+                            print(f"   📤 Uploading batch {batch_num} in background... ({len(batch_files)} images)", flush=True)
+
+                            def upload_image(args):
+                                idx, output_file = args
+                                gcs_url = self.storage.upload_and_get_url(
+                                    output_file,
+                                    output_bucket,
+                                    f"{gcs_prefix}/{output_file.name}"
+                                )
+                                return gcs_url
+
+                            with ThreadPoolExecutor(max_workers=10) as executor:
+                                urls = list(executor.map(upload_image, enumerate(batch_files)))
+
+                            with all_urls_lock:
+                                all_image_urls.extend(urls)
+
+                            print(f"   ✅ Batch {batch_num} uploaded ({len(urls)} images, total: {len(all_image_urls)})", flush=True)
+
+                        except Exception as e:
+                            print(f"   ❌ Upload batch {batch_num} failed: {str(e)}", flush=True)
+                            raise
+                        finally:
+                            upload_queue.task_done()
+
+                # Start upload worker thread
+                worker_thread = threading.Thread(target=upload_worker)
+                worker_thread.start()
+                print(f"🚀 Upload worker thread started\n", flush=True)
+
+                # Check which files already exist in GCS (for resume)
+                print(f"🔍 Checking GCS for existing files...", flush=True)
+                from google.cloud import storage
+                gcs_client = storage.Client()
+                gcs_bucket = gcs_client.bucket(output_bucket)
+
+                existing_files = set()
+                blobs = gcs_bucket.list_blobs(prefix=gcs_prefix)
+                for blob in blobs:
+                    filename = Path(blob.name).name
+                    existing_files.add(filename)
+
+                print(f"   Found {len(existing_files)} existing files in GCS", flush=True)
+
+                # Filter out files that already exist
+                files_to_process = [f for f in input_files if f.name not in existing_files]
+                skipped_count = len(input_files) - len(files_to_process)
+
+                if skipped_count > 0:
+                    print(f"   ⏭️  Skipping {skipped_count} files that already exist", flush=True)
+                    # Add existing files to URL list
+                    for filename in existing_files:
+                        if any(f.name == filename for f in input_files):
+                            with all_urls_lock:
+                                all_image_urls.append(f"gs://{output_bucket}/{gcs_prefix}/{filename}")
+
+                print(f"   Processing {len(files_to_process)} remaining files", flush=True)
+
+                # Process batches (upscale + downsample, then queue upload)
+                total_batches = (len(files_to_process) + batch_size - 1) // batch_size
+
+                for batch_idx in range(0, len(files_to_process), batch_size):
+                    batch_files = files_to_process[batch_idx:batch_idx + batch_size]
+                    batch_num = (batch_idx // batch_size) + 1
+
+                    print(f"\n📦 BATCH {batch_num}/{total_batches} ({len(batch_files)} images)", flush=True)
+                    print(f"   Upscaling...", flush=True)
+
+                    # Upscale this batch
+                    from PIL import Image
+                    import numpy as np
+
+                    batch_output_files = []
+                    for img_file in batch_files:
+                        pil_img = Image.open(img_file)
+                        img = np.array(pil_img)
+                        if img.ndim == 2:
+                            img = np.stack([img, img, img], axis=2)
+                        elif img.shape[2] == 4:
+                            img = img[:, :, :3]
+
+                        img = img[:, :, ::-1]  # RGB to BGR
+                        output, _ = upscaler.upsampler.enhance(img, outscale=scale)
+                        output = output[:, :, ::-1]  # BGR to RGB
+
+                        output_file = output_dir / img_file.name
+                        Image.fromarray(output).save(output_file)
+                        batch_output_files.append(output_file)
+
+                    print(f"   ✓ Upscaled {len(batch_output_files)} images", flush=True)
+
+                    # Downsample if needed
+                    if downsample_scale < 1.0:
+                        print(f"   Downsampling to {downsample_scale}x... (parallel)", flush=True)
+                        from PIL import Image as PILImage
+                        PILImage.MAX_IMAGE_PIXELS = None
+
+                        def downsample_image(args):
+                            idx, output_file = args
+                            img = Image.open(output_file)
+                            new_size = (int(img.width * downsample_scale), int(img.height * downsample_scale))
+                            img = img.resize(new_size, Image.LANCZOS)
+                            img.save(output_file)
+
+                        with ThreadPoolExecutor(max_workers=10) as executor:
+                            list(executor.map(downsample_image, enumerate(batch_output_files)))
+
+                        print(f"   ✓ Downsampled {len(batch_output_files)} images", flush=True)
+
+                    # Queue batch for background upload
+                    upload_queue.put((batch_num, batch_output_files))
+                    print(f"   🔄 Batch {batch_num} queued for upload, continuing to next batch...", flush=True)
+
+                # Signal worker to stop and wait for completion
+                print(f"\n⏳ All batches processed, waiting for uploads to complete...", flush=True)
+                upload_queue.put(None)  # Poison pill
+                upload_queue.join()
+                worker_thread.join()
+                print(f"✅ Upload worker finished", flush=True)
+
+                print(f"\n{'='*60}", flush=True)
+                print(f"✅ ALL BATCHES COMPLETE", flush=True)
+                print(f"   Total images processed: {len(all_image_urls)}", flush=True)
+                print(f"{'='*60}\n", flush=True)
+
+                image_urls = all_image_urls
 
                 return {
                     'output': {
