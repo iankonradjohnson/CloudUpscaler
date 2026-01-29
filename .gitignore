@@ -54,3 +54,4 @@ runpod-env-var.txt
 # Docker
 *.pth
 docker/net_g_1000000.pth
+gcs_credentials.json
